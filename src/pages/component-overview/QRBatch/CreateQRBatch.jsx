@@ -1,0 +1,816 @@
+import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import {
+    Generate_QR_Preview,
+    Confirm_And_Save_Batch,
+    Generate_Serial_Numbers,
+    Clear_QR_Preview
+} from '../../../Redux/Action/QRBatchAction/QRBatchAction';
+import { Fetch_Products } from '../../../Redux/Action/ProductsAction/ProductsAction';
+import {
+    ArrowLeft, Trash2, Package, Eye, Save,
+    CheckCircle2, QrCode as QrCodeIcon, Download,
+    Box, Printer, Hash
+} from 'lucide-react';
+import {
+    Select, InputNumber, Input, DatePicker, Button, message
+} from 'antd';
+import dayjs from 'dayjs';
+import { getUserData } from '../../../utils/authUtils';
+
+const CreateQRBatch = () => {
+    const dispatch = useDispatch();
+    const { userId } = getUserData();
+    const navigate = useNavigate();
+
+    const { products } = useSelector((state) => state.product);
+    const { previewData, previewLoading, actionLoading } = useSelector((state) => state.qrBatch);
+
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [quantity, setQuantity] = useState(1);
+    const [serialItems, setSerialItems] = useState([]);
+
+    useEffect(() => {
+        dispatch(Fetch_Products());
+        dispatch(Clear_QR_Preview());
+    }, [dispatch]);
+
+    // Auto-set qty=1 and generate 1 serial when product selected
+    const handleProductChange = async (value) => {
+        setSelectedProduct(value);
+        setQuantity(1);
+        try {
+            const serials = await dispatch(Generate_Serial_Numbers(1));
+            setSerialItems(serials.map((s) => ({
+                serialNo: s,
+                warrantyDesc: '',
+                warrantyTerm: '',
+                purchaseDate: dayjs().format('YYYY-MM-DD'),
+                validityDate: ''
+            })));
+        } catch {
+            message.error('Failed to generate serial numbers');
+        }
+    };
+
+    const handleQuantityChange = async (newQty) => {
+        if (!newQty || newQty <= 0) { setQuantity(1); return; }
+        if (newQty > 100) { message.error('Maximum 100 items per batch'); setQuantity(100); return; }
+        setQuantity(newQty);
+        try {
+            const serials = await dispatch(Generate_Serial_Numbers(newQty));
+            setSerialItems(serials.map((s) => ({
+                serialNo: s,
+                warrantyDesc: '',
+                warrantyTerm: '',
+                purchaseDate: dayjs().format('YYYY-MM-DD'),
+                validityDate: ''
+            })));
+        } catch {
+            message.error('Failed to generate serial numbers');
+        }
+    };
+
+    const handleSerialItemChange = (index, field, value) => {
+        const updated = [...serialItems];
+        updated[index][field] = value;
+        setSerialItems(updated);
+    };
+
+    const handleRemoveItem = (index) => {
+        const updated = serialItems.filter((_, i) => i !== index);
+        setSerialItems(updated);
+        setQuantity(updated.length);
+    };
+
+    const handleGeneratePreview = async () => {
+        if (!selectedProduct) { message.error('Please select a product'); return; }
+        if (serialItems.length === 0) { message.error('Please add at least one serial item'); return; }
+        try {
+            await dispatch(Generate_QR_Preview({
+                productId: parseInt(selectedProduct),
+                quantity: serialItems.length,
+                serialItems: serialItems.map(item => ({
+                    ...item,
+                    purchaseDate: item.purchaseDate || null,
+                    validityDate: item.validityDate || null
+                }))
+            }));
+            message.success('Preview generated');
+            setTimeout(() => {
+                document.getElementById('qr-preview-section')?.scrollIntoView({ behavior: 'smooth' });
+            }, 300);
+        } catch { }
+    };
+
+    const handleConfirmSave = async () => {
+        if (!previewData) { message.error('Please generate preview first'); return; }
+        try {
+            await dispatch(Confirm_And_Save_Batch({
+                productId: parseInt(selectedProduct),
+                serialItems: serialItems.map(item => ({
+                    ...item,
+                    purchaseDate: item.purchaseDate || null,
+                    validityDate: item.validityDate || null
+                })),
+                createdBy: userId
+            }));
+            message.success('Batch saved successfully');
+            navigate('/qr-batch');
+        } catch { }
+    };
+
+    const downloadQRCode = (qrCode, serialNo, type) => {
+        try {
+            const link = document.createElement('a');
+            link.href = `data:image/png;base64,${qrCode.qrImageBase64}`;
+            link.download = `${serialNo}_${type}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch {
+            message.error('Failed to download');
+        }
+    };
+
+    const handlePrint = () => {
+        if (!previewData?.serials?.length) {
+            message.error('No QR codes to print. Generate preview first.');
+            return;
+        }
+
+        const productName = previewData.productName || 'Product';
+        const batchDate = dayjs().format('DD MMM YYYY');
+
+        // Collect all QR items first (with left/right layout)
+        let qrItems = [];
+        previewData.serials.forEach((serial) => {
+            const productQR = serial.qrCodes?.find(q => q.qrType === 'product');
+            const boxQR = serial.qrCodes?.find(q => q.qrType === 'box');
+
+            const detailsHtml = `
+            <div class="d-serial">${serial.serialNo}</div>
+            <div class="d-product">${productName}</div>
+            ${serial.warrantyDesc ? `<div class="d-row"><span class="dk">Warranty</span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' · ' + serial.warrantyTerm : ''}</span></div>` : ''}
+            ${serial.purchaseDate ? `<div class="d-row"><span class="dk">Purchase</span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
+            ${serial.validityDate ? `<div class="d-row"><span class="dk">Valid Till</span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
+        `;
+
+            if (productQR) {
+                qrItems.push(`
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Product QR"/>
+                    </div>
+                    <div class="qr-right">${detailsHtml}</div>
+                </div>
+            `);
+            }
+            if (boxQR) {
+                qrItems.push(`
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${boxQR.qrImageBase64}" alt="Box QR"/>
+                    </div>
+                    <div class="qr-right">${detailsHtml}</div>
+                </div>
+            `);
+            }
+        });
+
+        // Split items into rows of 4
+        let rowsHtml = '';
+        for (let i = 0; i < qrItems.length; i += 4) {
+            const rowItems = qrItems.slice(i, i + 4);
+            rowsHtml += `<div class="qr-row">${rowItems.join('')}</div>`;
+        }
+
+        const printHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>QR Batch &mdash; ${productName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  @media print {
+    @page { 
+      margin: 0.3in;
+      size: A4 portrait;
+    }
+    body { 
+      margin: 0;
+      background: #fff;
+    }
+    .no-print {
+      display: none !important;
+    }
+  }
+  body {
+    font-family: 'Sofia Sans', sans-serif;
+    background: #fff; 
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Screen only elements */
+  .screen-header {
+    display: flex; 
+    align-items: flex-end; 
+    justify-content: space-between;
+    padding: 22px 32px 16px;
+    border-bottom: 2px solid #111;
+    margin-bottom: 4px;
+    background: #fff;
+  }
+  
+  .screen-footer {
+    padding: 12px 32px;
+    border-top: 1px solid #e0e0e0;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-top: 8px;
+    background: #fff;
+  }
+
+  @media print {
+    .screen-header, .screen-footer {
+      display: none !important;
+    }
+  }
+
+  .screen-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .screen-header .sub { font-size: 11px; color: #666; margin-top: 3px; }
+  .screen-header .right { text-align: right; }
+  .screen-header .pills { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
+  .pill-d { background: #111; color: #fff; }
+  .pill-l { background: #f2f2f2; color: #444; }
+  .screen-header .dt { font-size: 10px; color: #aaa; }
+  .screen-footer span { font-size: 10px; color: #bbb; }
+  .screen-footer .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* Print content */
+  .print-content { 
+    padding: 20px 32px; 
+  }
+  @media print {
+    .print-content {
+      padding: 0;
+    }
+  }
+
+  /* QR Row - 4 items per row */
+  .qr-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* QR Item - exact original layout */
+  .qr-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  /* Left side - QR code and tag - exactly like original */
+  .qr-left {
+    width: 100px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding-right: 12px;
+  }
+
+  .qr-left img {
+    width: 80px;
+    height: 80px;
+    display: block;
+  }
+
+  .type-tag {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .type-tag.product { background: #111; color: #fff; }
+  .type-tag.box { background: #efefef; color: #555; }
+
+  /* Right side - details - exactly like original */
+  .qr-right { 
+    flex: 1;
+    min-width: 0; /* Prevents overflow */
+  }
+
+  .d-serial {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #111;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+  }
+
+  .d-product { 
+    font-size: 11px; 
+    font-weight: 600; 
+    color: #222; 
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .d-row { 
+    display: flex; 
+    gap: 4px; 
+    margin-top: 2px;
+    flex-wrap: wrap;
+  }
+    .print-btn-container {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 32px 0;
+  }
+
+  .print-btn {
+    background: #111;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Sofia Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+  }
+
+  .print-btn:hover {
+    background: #333;
+  }
+
+  .print-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media print {
+    .print-btn-container, .print-btn {
+      display: none !important;
+    }
+  }
+  .dk { 
+    font-size: 8px; 
+    font-weight: 700; 
+    color: #aaa; 
+    text-transform: uppercase; 
+    letter-spacing: 0.2px; 
+    width: 45px;
+    flex-shrink: 0;
+  }
+
+  .dv { 
+    font-size: 9px; 
+    color: #444;
+    word-break: break-word;
+  }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .qr-row {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (max-width: 800px) {
+    .qr-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 500px) {
+    .qr-row {
+      grid-template-columns: repeat(1, 1fr);
+    }
+  }
+</style>
+</head>
+<body>
+<!-- Screen Only Header -->
+<div class="screen-header">
+  <div>
+    <h1>QR Code Batch</h1>
+    <div class="sub">${productName}</div>
+  </div>
+  <div style="display: flex; gap: 15px;">
+    <div class="right">
+    <div class="pills">
+      <span class="pill pill-d">${previewData.totalSerials || previewData.serials.length} Serials</span>
+      <span class="pill pill-l">${previewData.totalQRCodes || qrItems.length} QR Codes</span>
+    </div>
+    <div class="dt">Generated: ${batchDate}</div>
+  </div>
+  <button class="print-btn" onclick="window.print()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M6 9V3h12v6M6 21h12v-6H6v6zM6 15H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2M6 11h0" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Print
+  </button>
+  </div>
+</div>
+
+<!-- Print Content - Exactly your original layout but in grid -->
+<div class="print-content">
+  ${rowsHtml || '<div style="text-align:center;padding:40px;">No QR codes to display</div>'}
+</div>
+
+<!-- Screen Only Footer -->
+<div class="screen-footer">
+  <span>Batch Print &middot; ${batchDate}</span>
+  <span class="brand">QR Batch System</span>
+  <span>Total: ${previewData.totalQRCodes || qrItems.length} codes</span>
+</div>
+
+<script>
+window.onload = function() { 
+  window.print();
+};
+</script>
+</body>
+</html>`;
+
+        const w = window.open('', '_blank');
+        if (w) {
+            w.document.write(printHTML);
+            w.document.close();
+        } else {
+            message.error('Popup blocked. Please allow popups for this site.');
+        }
+    };
+
+    // ── Shared style objects ──
+    const card = {
+        background: '#fff',
+        border: '1px solid #e8e8e8',
+        borderRadius: 10,
+        marginBottom: 16
+    };
+    const cardBody = { padding: '20px 24px' };
+    const sectionHead = {
+        display: 'flex', alignItems: 'center', gap: 8,
+        marginBottom: 18, paddingBottom: 14,
+        borderBottom: '1px solid #f2f2f2'
+    };
+    const sectionIcon = {
+        width: 28, height: 28, background: '#f4f4f4',
+        borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center'
+    };
+    const fieldLabel = {
+        display: 'block', fontSize: 11, fontWeight: 700, color: '#999',
+        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6
+    };
+
+    return (
+        <>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@300;400;500;600;700&display=swap');
+                .cqb, .cqb * { font-family: 'Sofia Sans', sans-serif !important; }
+
+                .cqb .ant-select-selector { border-radius: 6px !important; border-color: #e0e0e0 !important; }
+                .cqb .ant-select-selector:hover { border-color: #bbb !important; }
+                .cqb .ant-select-focused .ant-select-selector { border-color: #555 !important; box-shadow: 0 0 0 2px rgba(0,0,0,0.05) !important; }
+                .cqb .ant-input { border-radius: 6px !important; border-color: #e0e0e0 !important; font-size: 13px !important; }
+                .cqb .ant-input:hover { border-color: #bbb !important; }
+                .cqb .ant-input:focus { border-color: #555 !important; box-shadow: 0 0 0 2px rgba(0,0,0,0.05) !important; }
+                .cqb .ant-input-number { border-radius: 6px !important; border-color: #e0e0e0 !important; }
+                .cqb .ant-input-number:hover { border-color: #bbb !important; }
+                .cqb .ant-picker { border-radius: 6px !important; border-color: #e0e0e0 !important; }
+                .cqb .ant-picker:hover { border-color: #bbb !important; }
+                .cqb .ant-btn { font-family: 'Sofia Sans', sans-serif !important; border-radius: 7px !important; font-size: 13px !important; font-weight: 600 !important; }
+
+                /* TABLE */
+                .stbl { width: 100%; border-collapse: collapse; }
+                .stbl thead tr { border-bottom: 1.5px solid #e8e8e8; }
+                .stbl thead th {
+                    font-size: 10.5px; font-weight: 700; color: #aaa;
+                    text-transform: uppercase; letter-spacing: 0.5px;
+                    padding: 0 8px 10px; text-align: left; white-space: nowrap;
+                }
+                .stbl thead th:first-child { padding-left: 0; width: 32px; }
+                .stbl thead th:last-child { width: 36px; }
+                .stbl tbody tr { border-bottom: 1px solid #f4f4f4; }
+                .stbl tbody tr:last-child { border-bottom: none; }
+                .stbl tbody td { padding: 8px 8px; vertical-align: middle; }
+                .stbl tbody td:first-child { padding-left: 0; }
+
+                /* PREVIEW GRID */
+                .prev-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+                .pqc { border: 1px solid #ebebeb; border-radius: 8px; overflow: hidden; background: #fff; transition: border-color .15s, box-shadow .15s; }
+                .pqc:hover { border-color: #bbb; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+                .pqc-bar { height: 3px; background: #111; }
+                .pqc-bar.box { background: #777; }
+                .pqc-img { padding: 12px; background: #fafafa; border-bottom: 1px solid #f2f2f2; }
+                .pqc-img img { width: 100%; display: block; }
+                .pqc-body { padding: 8px 10px 10px; }
+                .pqc-sn { font-family: 'Courier New', monospace; font-size: 9.5px; font-weight: 700; color: #111; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .pqc-foot { display: flex; align-items: center; justify-content: space-between; }
+                .pqc-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+                .pqc-tag.product { background: #111; color: #fff; }
+                .pqc-tag.box { background: #f0f0f0; color: #555; }
+                .pqc-dl { opacity: 0; transition: opacity .15s; background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center; }
+                .pqc:hover .pqc-dl { opacity: 1; }
+
+                /* BUTTONS */
+                .btn-prev { height: 40px !important; border-color: #d0d0d0 !important; color: #333 !important; background: #fff !important; }
+                .btn-prev:hover { border-color: #888 !important; color: #111 !important; }
+                .btn-save { height: 40px !important; background: #111 !important; border-color: #111 !important; color: #fff !important; }
+                .btn-save:hover { background: #333 !important; border-color: #333 !important; }
+                .btn-prnt { height: 33px !important; border-color: #d0d0d0 !important; color: #555 !important; background: #fff !important; }
+                .btn-prnt:hover { border-color: #111 !important; color: #111 !important; }
+
+                /* SUCCESS BAR */
+                .sbar { display: flex; align-items: center; gap: 10px; background: #f6fef9; border: 1px solid #b7ebc8; border-radius: 8px; padding: 11px 16px; margin-bottom: 18px; }
+
+                /* HINT */
+                .hint { background: #f8f8f8; border: 1px solid #ebebeb; border-radius: 7px; padding: 10px 14px; font-size: 12px; color: #888; line-height: 1.6; }
+                .hint strong { color: #555; }
+
+                .back-btn:hover { border-color: #999 !important; }
+            `}</style>
+
+            <div className="cqb" style={{ minHeight: '100vh', background: '#F5F5F5', fontFamily: 'Sofia Sans, sans-serif' }}>
+
+                {/* ── HEADER ── */}
+                <div style={{ background: '#fff', borderBottom: '1px solid #e8e8e8' }}>
+                    <div style={{ maxWidth: 1100, margin: '0 auto', height: 56, display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <button
+                            className="back-btn"
+                            onClick={() => navigate('/qr-batch')}
+                            style={{ width: 32, height: 32, border: '1px solid #e0e0e0', borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                        >
+                            <ArrowLeft size={15} strokeWidth={2} color="#555" />
+                        </button>
+                        <div style={{ width: 1, height: 18, background: '#e8e8e8' }} />
+                        <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>Generate QR Codes</div>
+                            <div style={{ fontSize: 12, color: '#aaa', marginTop: 1 }}>Create new QR code batch for products</div>
+                        </div>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                            {previewData && (
+                                <Button className="btn-prnt" icon={<Printer size={14} strokeWidth={1.8} />} onClick={handlePrint} style={{ height: 34 }}>
+                                    Print Batch
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── PAGE CONTENT ── */}
+                <div style={{ maxWidth: 1150, margin: '0 auto', padding: '8px 0px' }}>
+
+                    {/* Card 1: Product Info */}
+                    <div style={card}>
+                        <div style={cardBody}>
+                            <div style={sectionHead}>
+                                <div style={sectionIcon}><Package size={14} strokeWidth={1.8} color="#666" /></div>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>Product Information</span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 16, alignItems: 'end' }}>
+                                <div>
+                                    <label style={fieldLabel}>Select Product <span style={{ color: '#e53535' }}>*</span></label>
+                                    <Select
+                                        size="medium"
+                                        placeholder="Choose a product"
+                                        value={selectedProduct}
+                                        onChange={handleProductChange}
+                                        style={{ width: '100%' }}
+                                        options={products.map(p => ({ label: p.name, value: p.id }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={fieldLabel}>Quantity <span style={{ color: '#e53535' }}>*</span></label>
+                                    <InputNumber
+                                        size="medium"
+                                        min={1} max={100}
+                                        value={quantity}
+                                        onChange={handleQuantityChange}
+                                        placeholder="1"
+                                        disabled={!selectedProduct}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                            </div>
+                            {!selectedProduct && (
+                                <div className="hint" style={{ marginTop: 14 }}>
+                                    Select a product first — serial numbers will be auto-generated with qty set to 1.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Card 2: Serial Details Table */}
+                    {serialItems.length > 0 && (
+                        <div style={card}>
+                            <div style={cardBody}>
+                                <div style={sectionHead}>
+                                    <div style={sectionIcon}><Hash size={14} strokeWidth={1.8} color="#666" /></div>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>Serial Details</span>
+                                    <div style={{ marginLeft: 'auto', background: '#111', color: '#fff', borderRadius: 4, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>
+                                        {serialItems.length} {serialItems.length === 1 ? 'item' : 'items'}
+                                    </div>
+                                </div>
+
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table className="stbl">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Serial No</th>
+                                                <th>Warranty Desc</th>
+                                                <th>Warranty Term</th>
+                                                <th>Purchase Date</th>
+                                                <th>Validity Date</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {serialItems.map((item, index) => (
+                                                <tr key={index}>
+                                                    <td>
+                                                        <div style={{ width: 22, height: 22, background: '#f0f0f0', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#777' }}>
+                                                            {index + 1}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontFamily: 'Courier New, monospace', fontSize: 11.5, fontWeight: 700, color: '#111', letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>
+                                                            {item.serialNo}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <Input size="medium" value={item.warrantyDesc}
+                                                            onChange={(e) => handleSerialItemChange(index, 'warrantyDesc', e.target.value)}
+                                                            placeholder="e.g., 1 Year Warranty"
+                                                            style={{ minWidth: 150 }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <Input size="medium" value={item.warrantyTerm}
+                                                            onChange={(e) => handleSerialItemChange(index, 'warrantyTerm', e.target.value)}
+                                                            placeholder="e.g., 12 months"
+                                                            style={{ minWidth: 120 }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <DatePicker size="medium"
+                                                            value={item.purchaseDate ? dayjs(item.purchaseDate) : null}
+                                                            onChange={(date) => handleSerialItemChange(index, 'purchaseDate', date ? date.format('YYYY-MM-DD') : '')}
+                                                            format="DD MMM YYYY"
+                                                            style={{ minWidth: 130 }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <DatePicker size="medium"
+                                                            value={item.validityDate ? dayjs(item.validityDate) : null}
+                                                            onChange={(date) => handleSerialItemChange(index, 'validityDate', date ? date.format('YYYY-MM-DD') : '')}
+                                                            format="DD MMM YYYY"
+                                                            style={{ minWidth: 130 }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <Button type="text" danger size="small"
+                                                            icon={<Trash2 size={13} strokeWidth={1.8} />}
+                                                            onClick={() => handleRemoveItem(index)}
+                                                            style={{ opacity: 0.45 }}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    {serialItems.length > 0 && (
+                        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                            <Button className="btn-prev" icon={<Eye size={14} strokeWidth={1.8} />} onClick={handleGeneratePreview} loading={previewLoading} style={{ flex: 1 }}>
+                                {previewLoading ? 'Generating...' : 'Generate Preview'}
+                            </Button>
+                            {previewData && (
+                                <>
+                                    <Button className="btn-save" icon={<Save size={14} strokeWidth={1.8} />} onClick={handleConfirmSave} loading={actionLoading} style={{ flex: 1 }}>
+                                        {actionLoading ? 'Saving...' : 'Confirm & Save'}
+                                    </Button>
+                                    {/* <Button className="btn-prnt" icon={<Printer size={14} strokeWidth={1.8} />} onClick={handlePrint} style={{ paddingLeft: 16, paddingRight: 16 }}>
+                                        Print
+                                    </Button> */}
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Card 3: QR Preview — full width, below */}
+                    {previewData && (
+                        <div id="qr-preview-section" style={card}>
+                            <div style={cardBody}>
+                                <div style={sectionHead}>
+                                    <div style={sectionIcon}><QrCodeIcon size={14} strokeWidth={1.8} color="#666" /></div>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>QR Preview</span>
+                                    <div style={{ marginLeft: 'auto' }}>
+                                        <Button className="btn-prnt" size="small" icon={<Printer size={13} strokeWidth={1.8} />} onClick={handlePrint} style={{ height: 30 }}>
+                                            Print All
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Success + stats */}
+                                <div className="sbar">
+                                    <CheckCircle2 size={16} strokeWidth={1.8} color="#25a855" />
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a7a3c' }}>Preview Generated</div>
+                                        <div style={{ fontSize: 11, color: '#3a9e60' }}>{previewData.totalQRCodes} QR codes ready to save</div>
+                                    </div>
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
+                                        {[
+                                            { label: 'Product', value: previewData.productName },
+                                            { label: 'Serials', value: previewData.totalSerials },
+                                            { label: 'Total QR', value: previewData.totalQRCodes },
+                                        ].map(s => (
+                                            <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{s.label}</span>
+                                                <span style={{ fontSize: s.label === 'Product' ? 13 : 15, fontWeight: 700, color: '#111' }}>{s.value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* QR Grid — 4 per row */}
+                                {previewData.serials && (
+                                    <div className="prev-grid">
+                                        {previewData.serials.map((serial) =>
+                                            serial.qrCodes?.map((qr, qi) => (
+                                                <div key={`${serial.serialNo}-${qi}`} className="pqc">
+                                                    <div className={`pqc-bar ${qr.qrType === 'box' ? 'box' : ''}`} />
+                                                    <div className="pqc-img">
+                                                        <img src={`data:image/png;base64,${qr.qrImageBase64}`} alt={`${qr.qrType} QR`} />
+                                                    </div>
+                                                    <div className="pqc-body">
+                                                        <div className="pqc-sn">{serial.serialNo}</div>
+                                                        <div className="pqc-foot">
+                                                            <span className={`pqc-tag ${qr.qrType}`}>
+                                                                {qr.qrType === 'product'
+                                                                    ? <><Package size={10} strokeWidth={2} /> Product</>
+                                                                    : <><Box size={10} strokeWidth={2} /> Box</>
+                                                                }
+                                                            </span>
+                                                            <button className="pqc-dl" onClick={() => downloadQRCode(qr, serial.serialNo, qr.qrType)} title="Download">
+                                                                <Download size={12} strokeWidth={1.8} color="#666" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="hint" style={{ marginTop: 16 }}>
+                                    <strong>2 QR codes per serial</strong> — Product (black stripe) and Box (gray stripe). Hover to download individually, or use Print All.
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty state */}
+                    {!selectedProduct && (
+                        <div style={{ textAlign: 'center', padding: '52px 0', color: '#d0d0d0' }}>
+                            <QrCodeIcon size={30} strokeWidth={1.2} style={{ display: 'block', margin: '0 auto 10px' }} />
+                            <span style={{ fontSize: 13 }}>Select a product to get started</span>
+                        </div>
+                    )}
+
+                </div>
+            </div>
+        </>
+    );
+};
+
+export default CreateQRBatch;
