@@ -13,6 +13,7 @@ import AuthReducer from './AuthReducer/AuthReducer';
 import UsersReducer from './UserReducer/UserReducer';
 import CategoryReducer from './ProductsReducer/CategoryReducer';
 import QRBatchReducer from './QRBatchReducer/QRBatchReducer';
+import PrintSettingsReducer from './PrintSettingsReducer/PrintSettingsReducer';
 
 const partyReducer = combineReducers({
   customer: CustomersReducer,
@@ -37,7 +38,8 @@ const rootReducer = combineReducers({
   user: UsersReducer,
   product: ProductsReducer,
   category: CategoryReducer,
-  qrBatch: QRBatchReducer
+  qrBatch: QRBatchReducer,
+  printSettings: PrintSettingsReducer
 });
 
 export default rootReducer;

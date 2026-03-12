@@ -1,31 +1,15 @@
 import {
-  LayoutDashboard,
-  BookOpen,
-  PieChart,
-  ShoppingCart,
-  Boxes,
-  Users,
-  User,
-  Truck,
-  Wallet,
-  FileText,
-  PackageOpen,
+  QrCode,
+  PlusSquare,
+  Layers,
   Package
 } from 'lucide-react';
 
 const icons = {
-  LayoutDashboard,
-  Boxes,
-  Users,
-  User,
-  Truck,
-  Wallet,
-  FileText,
-  PackageOpen,
+  QrCode,
   Package,
-  ShoppingCart,
-  BookOpen,
-  PieChart
+  PlusSquare,
+  Layers,
 };
 
 import { getUserData } from '../utils/authUtils';
@@ -33,12 +17,28 @@ import { getUserData } from '../utils/authUtils';
 const userData = getUserData();
 
 const commonItems = [
+  // {
+  //   id: 'dashboard',
+  //   title: 'Dashboard',
+  //   type: 'item',
+  //   url: '/dashboard/default',
+  //   icon: icons.LayoutDashboard,
+  //   breadcrumbs: false
+  // },
   {
-    id: 'dashboard',
-    title: 'Dashboard',
+    id: 'qr-batch',
+    title: 'QR Batch',
     type: 'item',
-    url: '/dashboard/default',
-    icon: icons.LayoutDashboard,
+    url: '/qr-batch',
+    icon: icons.QrCode,
+    breadcrumbs: false
+  },
+  {
+    id: 'create-qr-batch',
+    title: 'Create QR Batch',
+    type: 'item',
+    url: '/qr-batch-create',
+    icon: icons.PlusSquare,
     breadcrumbs: false
   },
   {
@@ -46,7 +46,7 @@ const commonItems = [
     title: 'Product Category',
     type: 'item',
     url: '/categories',
-    icon: icons.PackageOpen,
+    icon: icons.Layers,
     breadcrumbs: false
   },
   {
@@ -55,22 +55,6 @@ const commonItems = [
     type: 'item',
     url: '/products',
     icon: icons.Package,
-    breadcrumbs: false
-  },
-  {
-    id: 'qr-batch',
-    title: 'QR Batch',
-    type: 'item',
-    url: '/qr-batch',
-    icon: icons.Truck,
-    breadcrumbs: false
-  },
-  {
-    id: 'qr-batch',
-    title: 'Create QR Batch',
-    type: 'item',
-    url: '/qr-batch-create',
-    icon: icons.Truck,
     breadcrumbs: false
   },
 ];

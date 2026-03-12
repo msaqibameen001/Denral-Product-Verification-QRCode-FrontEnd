@@ -53,7 +53,7 @@ export default function AuthLogin({ isDemo = false }) {
   };
 
   const redirectToDashboard = () => {
-    window.location.href = '/dashboard/default';
+    window.location.href = '/qr-batch';
   };
 
   const handleCloseAlert = () => {

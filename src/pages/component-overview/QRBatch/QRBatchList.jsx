@@ -289,7 +289,7 @@ const QRBatchList = () => {
                         {/* Card Top Bar */}
                         <div style={{ padding: '14px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: '12px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>All Batches</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>List of all Batches</span>
                                 {!loading && sorted.length > 0 && (
                                     <span style={{ fontSize: 11, fontWeight: 700, background: '#f0f0f0', color: '#777', borderRadius: 4, padding: '2px 7px' }}>
                                         {sorted.length}
@@ -402,6 +402,9 @@ const QRBatchList = () => {
                                                         <Calendar size={12} strokeWidth={1.8} style={{ color: '#ccc', flexShrink: 0 }} />
                                                         <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
                                                             {dayjs(batch.generatedAt).format('DD MMM YYYY')}
+                                                        </span>
+                                                        <span style={{ fontSize: 11, color: '#bbb', display: 'block', marginTop: 1 }}>
+                                                            {dayjs(batch.generatedAt).add(5, 'hour').format('hh:mm A')}
                                                         </span>
                                                     </div>
                                                 </td>

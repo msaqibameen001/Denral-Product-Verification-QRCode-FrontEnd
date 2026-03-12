@@ -26,14 +26,16 @@ const MainRoutes = {
   children: [
     {
       path: '/',
-      element: isLoggedIn() ? <DashboardDefault /> : <Navigate to="/login" />
+      // element: isLoggedIn() ? <DashboardDefault /> : <Navigate to="/login" />
+      element: isLoggedIn() ? <QRBatchList /> : <Navigate to="/login" />
     },
     {
       path: 'dashboard',
       children: [
         {
           path: 'default',
-          element: isLoggedIn() ? <DashboardDefault /> : <Navigate to="/login" />
+          // element: isLoggedIn() ? <DashboardDefault /> : <Navigate to="/login" />
+          element: isLoggedIn() ? <QRBatchList /> : <Navigate to="/login" />
         }
       ]
     },

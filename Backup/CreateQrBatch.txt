@@ -181,32 +181,32 @@ const CreateQRBatch = () => {
             const boxQR = serial.qrCodes?.find(q => q.qrType === 'box');
 
             const detailsHtml = `
-            ${cfg.showSerialNo ? `<div class="d-serial">${serial.serialNo}</div>` : ''}
-            ${cfg.showProduct ? `<div class="d-product">${productName}</div>` : ''}
-            ${cfg.showWarranty && serial.warrantyDesc ? `<div class="d-row"><span class="dk">WARRANTY:</span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' - ' + serial.warrantyTerm : ''}</span></div>` : ''}
-            ${cfg.showPurchase && serial.purchaseDate ? `<div class="d-row"><span class="dk">PURCHASE:</span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
-            ${cfg.showValidity && serial.validityDate ? `<div class="d-row"><span class="dk">VALID TILL:</span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
-        `;
+                ${cfg.showSerialNo ? `<div class="d-serial">${serial.serialNo}</div>` : ''}
+                ${cfg.showProduct ? `<div class="d-product">${productName}</div>` : ''}
+                ${cfg.showWarranty && serial.warrantyDesc ? `<div class="d-row"><span class="dk">Warranty</span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' · ' + serial.warrantyTerm : ''}</span></div>` : ''}
+                ${cfg.showPurchase && serial.purchaseDate ? `<div class="d-row"><span class="dk">Purchase</span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
+                ${cfg.showValidity && serial.validityDate ? `<div class="d-row"><span class="dk">Valid Till</span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
+            `;
 
             if (productQR) {
                 qrItems.push(`
-            <div class="qr-item">
-                <div class="qr-left">
-                    <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Product QR"/>
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Product QR"/>
+                    </div>
+                    <div class="qr-right">${detailsHtml}</div>
                 </div>
-                <div class="qr-right">${detailsHtml}</div>
-            </div>
-        `);
+            `);
             }
             if (boxQR) {
                 qrItems.push(`
-            <div class="qr-item">
-                <div class="qr-left">
-                    <img src="data:image/png;base64,${boxQR.qrImageBase64}" alt="Box QR"/>
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${boxQR.qrImageBase64}" alt="Box QR"/>
+                    </div>
+                    <div class="qr-right">${detailsHtml}</div>
                 </div>
-                <div class="qr-right">${detailsHtml}</div>
-            </div>
-        `);
+            `);
             }
         });
 
@@ -228,14 +228,17 @@ const CreateQRBatch = () => {
   
   @media print {
     @page { 
-      margin: 0.5in 0.4in;
+      margin: 0.3in;
       size: A4 portrait;
     }
-    body { margin: 0; background: #fff; }
-    .screen-header, .screen-footer { display: none !important; }
-    .print-content { padding: 0 !important; }
+    body { 
+      margin: 0;
+      background: #fff;
+    }
+    .no-print {
+      display: none !important;
+    }
   }
-  
   body {
     font-family: 'Sofia Sans', sans-serif;
     background: #fff; 
@@ -248,128 +251,191 @@ const CreateQRBatch = () => {
     display: flex; 
     align-items: flex-end; 
     justify-content: space-between;
-    padding: 22px 32px 16px; 
-    border-bottom: 2px solid #111; 
+    padding: 22px 32px 16px;
+    border-bottom: 2px solid #111;
     margin-bottom: 4px;
+    background: #fff;
   }
+  
+  .screen-footer {
+    padding: 12px 32px;
+    border-top: 1px solid #e0e0e0;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-top: 8px;
+    background: #fff;
+  }
+
+  @media print {
+    .screen-header, .screen-footer {
+      display: none !important;
+    }
+  }
+
   .screen-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
   .screen-header .sub { font-size: 11px; color: #666; margin-top: 3px; }
+  .screen-header .right { text-align: right; }
   .screen-header .pills { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
   .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
   .pill-d { background: #111; color: #fff; }
   .pill-l { background: #f2f2f2; color: #444; }
   .screen-header .dt { font-size: 10px; color: #aaa; }
-  .screen-footer { 
-    padding: 12px 32px; 
-    border-top: 1px solid #e0e0e0; 
-    display: flex; 
-    justify-content: space-between; 
-    margin-top: 8px; 
-  }
   .screen-footer span { font-size: 10px; color: #bbb; }
-  .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
-  .print-btn { 
-    background: #111; 
-    color: #fff; 
-    border: none; 
-    padding: 8px 16px; 
-    border-radius: 6px; 
-    font-size: 13px; 
-    font-weight: 600; 
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    gap: 8px; 
-  }
-  .print-btn:hover { background: #333; }
-  .print-btn svg { width: 15px; height: 15px; }
+  .screen-footer .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
 
+  .print-content { 
+    padding: 20px 32px; 
+  }
   @media print {
-    .screen-header, .screen-footer, .print-btn { display: none !important; }
+    .print-content {
+      padding: 0;
+    }
   }
 
-  .print-content { padding: 20px 32px; }
-  @media print {
-    .print-content { padding: 0; }
-  }
-
-  /* ── PROPER PRINT LAYOUT ── */
+  /* Dynamic columns based on global settings */
   .qr-row {
     display: grid;
     grid-template-columns: repeat(${cfg.columns}, 1fr);
-    gap: ${cfg.columns === 1 ? '20px' : cfg.columns === 2 ? '18px' : cfg.columns === 3 ? '14px' : '12px'};
-    margin-bottom: ${cfg.columns === 1 ? '24px' : cfg.columns === 2 ? '20px' : '16px'};
+    gap: 16px;
+    margin-bottom: 20px;
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
   .qr-item {
     display: flex;
-    align-items: flex-start;
-    gap: ${cfg.columns === 1 ? '16px' : cfg.columns === 2 ? '14px' : '10px'};
-    padding: ${cfg.columns === 1 ? '14px' : cfg.columns === 2 ? '12px' : cfg.columns === 3 ? '10px' : '8px'};
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
   }
 
   .qr-left {
-    width: ${cfg.columns === 1 ? '110px' : cfg.columns === 2 ? '100px' : cfg.columns === 3 ? '85px' : '75px'};
+    width: 100px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
+    gap: 4px;
+    padding-right: 12px;
   }
 
   .qr-left img {
-    width: 100%;
-    height: auto;
+    width: 80px;
+    height: 80px;
     display: block;
   }
 
+  .type-tag {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .type-tag.product { background: #111; color: #fff; }
+  .type-tag.box { background: #efefef; color: #555; }
+
   .qr-right { 
-    flex: 1; 
+    flex: 1;
     min-width: 0;
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
   }
 
   .d-serial {
     font-family: 'Courier New', monospace;
-    font-size: ${cfg.columns === 1 ? '10px' : cfg.columns === 2 ? '9.5px' : cfg.columns === 3 ? '8.5px' : '8px'};
+    font-size: 10px;
     font-weight: 700;
     color: #111;
     letter-spacing: 0.3px;
-    margin-bottom: ${cfg.columns <= 2 ? '5px' : '4px'};
-    line-height: 1.3;
+    margin-bottom: 2px;
   }
 
   .d-product { 
-    font-size: ${cfg.columns === 1 ? '11px' : cfg.columns === 2 ? '10.5px' : cfg.columns === 3 ? '9.5px' : '9px'};
-    font-weight: 600;
-    color: #222;
-    margin-bottom: ${cfg.columns <= 2 ? '6px' : '5px'};
-    line-height: 1.3;
+    font-size: 11px; 
+    font-weight: 600; 
+    color: #222; 
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .d-row { 
-    display: block;
-    margin-top: -5px;
+    display: flex; 
+    gap: 4px; 
+    margin-top: 2px;
+    flex-wrap: wrap;
+  }
+
+  .print-btn-container {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 32px 0;
+  }
+
+  .print-btn {
+    background: #111;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Sofia Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+  }
+
+  .print-btn:hover {
+    background: #333;
+  }
+
+  .print-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media print {
+    .print-btn-container, .print-btn {
+      display: none !important;
+    }
   }
 
   .dk { 
-    font-size: ${cfg.columns === 1 ? '8.5px' : cfg.columns === 2 ? '7px' : '7.5px'};
-    font-weight: 700;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+    font-size: 8px; 
+    font-weight: 700; 
+    color: #aaa; 
+    text-transform: uppercase; 
+    letter-spacing: 0.2px; 
+    width: 45px;
     flex-shrink: 0;
   }
 
   .dv { 
-    font-size: ${cfg.columns === 1 ? '7.5px' : cfg.columns === 2 ? '7px' : '6.5px'};
-    color: #333;
-    line-height: 1.4;
-    flex: 1;
+    font-size: 9px; 
+    color: #444;
+    word-break: break-word;
+  }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .qr-row {
+      grid-template-columns: repeat(${Math.min(cfg.columns, 3)}, 1fr);
+    }
+  }
+  @media (max-width: 800px) {
+    .qr-row {
+      grid-template-columns: repeat(${Math.min(cfg.columns, 2)}, 1fr);
+    }
+  }
+  @media (max-width: 500px) {
+    .qr-row {
+      grid-template-columns: repeat(1, 1fr);
+    }
   }
 </style>
 </head>
@@ -380,19 +446,19 @@ const CreateQRBatch = () => {
     <div class="sub">${productName}</div>
   </div>
   <div style="display: flex; gap: 15px;">
-    <div style="text-align: right;">
-      <div class="pills">
-        <span class="pill pill-d">${previewData.totalSerials || previewData.serials.length} Serials</span>
-        <span class="pill pill-l">${previewData.totalQRCodes || qrItems.length} QR Codes</span>
-      </div>
-      <div class="dt">Generated: ${batchDate}</div>
+    <div class="right">
+    <div class="pills">
+      <span class="pill pill-d">${previewData.totalSerials || previewData.serials.length} Serials</span>
+      <span class="pill pill-l">${previewData.totalQRCodes || qrItems.length} QR Codes</span>
     </div>
-    <button class="print-btn" onclick="window.print()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M6 9V3h12v6M6 21h12v-6H6v6zM6 15H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2M6 11h0" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Print
-    </button>
+    <div class="dt">Generated: ${batchDate}</div>
+  </div>
+  <button class="print-btn" onclick="window.print()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M6 9V3h12v6M6 21h12v-6H6v6zM6 15H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2M6 11h0" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Print
+  </button>
   </div>
 </div>
 
@@ -579,17 +645,17 @@ window.onload = function() {
                         </div>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                             <Tooltip title="Configure global print layout & labels" placement="left">
-                                <button
+                                <button 
                                     onClick={() => setShowPrintSetup(true)}
-                                    style={{
-                                        height: 34,
+                                    style={{ 
+                                        height: 34, 
                                         padding: '0 14px',
-                                        border: '1px solid #e0e0e0',
-                                        borderRadius: 7,
-                                        background: '#fff',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
+                                        border: '1px solid #e0e0e0', 
+                                        borderRadius: 7, 
+                                        background: '#fff', 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
                                         gap: 7,
                                         fontSize: 12,
                                         fontWeight: 600,
@@ -672,7 +738,7 @@ window.onload = function() {
                                             <Copy size={13} strokeWidth={2} />
                                             Bulk Warranty Data
                                         </div>
-                                        <Button
+                                        <Button 
                                             className="apply-bulk-btn"
                                             size="small"
                                             onClick={applyBulkToAll}
@@ -681,12 +747,12 @@ window.onload = function() {
                                             Apply to All {serialItems.length} Serials
                                         </Button>
                                     </div>
-
+                                    
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                         <div>
                                             <label style={fieldLabel}>Warranty Description</label>
-                                            <Input
-                                                size="medium"
+                                            <Input 
+                                                size="medium" 
                                                 value={bulkWarranty.warrantyDesc}
                                                 onChange={(e) => handleBulkWarrantyChange('warrantyDesc', e.target.value)}
                                                 placeholder="e.g., 1 Year Warranty"
@@ -694,8 +760,8 @@ window.onload = function() {
                                         </div>
                                         <div>
                                             <label style={fieldLabel}>Warranty Term</label>
-                                            <Input
-                                                size="medium"
+                                            <Input 
+                                                size="medium" 
                                                 value={bulkWarranty.warrantyTerm}
                                                 onChange={(e) => handleBulkWarrantyChange('warrantyTerm', e.target.value)}
                                                 placeholder="e.g., 12 months"
@@ -703,7 +769,7 @@ window.onload = function() {
                                         </div>
                                         <div>
                                             <label style={fieldLabel}>Purchase Date</label>
-                                            <DatePicker
+                                            <DatePicker 
                                                 size="medium"
                                                 value={bulkWarranty.purchaseDate ? dayjs(bulkWarranty.purchaseDate) : null}
                                                 onChange={(date) => handleBulkWarrantyChange('purchaseDate', date ? date.format('YYYY-MM-DD') : '')}
@@ -713,7 +779,7 @@ window.onload = function() {
                                         </div>
                                         <div>
                                             <label style={fieldLabel}>Validity Date</label>
-                                            <DatePicker
+                                            <DatePicker 
                                                 size="medium"
                                                 value={bulkWarranty.validityDate ? dayjs(bulkWarranty.validityDate) : null}
                                                 onChange={(date) => handleBulkWarrantyChange('validityDate', date ? date.format('YYYY-MM-DD') : '')}

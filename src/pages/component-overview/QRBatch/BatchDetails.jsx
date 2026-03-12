@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Get_Batch_Details } from '../../../Redux/Action/QRBatchAction/QRBatchAction';
+import { Fetch_Print_Settings } from '../../../Redux/Action/PrintSettingsAction/PrintSettingsAction';
 import {
     ArrowLeft, Download, Package, Calendar,
     User, QrCode, Loader2, Tag, Share2,
-    Box, Printer, Hash, CheckCircle2
+    Box, Printer, Hash, CheckCircle2, Settings
 } from 'lucide-react';
 import dayjs from 'dayjs';
-import { message } from 'antd';
+import { message, Tooltip } from 'antd';
+import PrintSetupModal from './PrintSetupModal';
 
 const BatchDetails = () => {
     const dispatch = useDispatch();
@@ -16,10 +18,14 @@ const BatchDetails = () => {
     const { batchId } = useParams();
 
     const { selectedBatch, actionLoading } = useSelector((state) => state.qrBatch);
+    const { settings: printSettings } = useSelector((state) => state.printSettings);
+
     const [selectedSerial, setSelectedSerial] = useState(null);
+    const [showPrintSetup, setShowPrintSetup] = useState(false);
 
     useEffect(() => {
         if (batchId) dispatch(Get_Batch_Details(parseInt(batchId)));
+        dispatch(Fetch_Print_Settings());
     }, [dispatch, batchId]);
 
     // Auto-select first serial as soon as batch loads
@@ -61,19 +67,28 @@ const BatchDetails = () => {
         const productName = selectedBatch.productName || 'Product';
         const batchDate = dayjs(selectedBatch.generatedAt).format('DD MMM YYYY');
 
-        // Build qr items list first, then split into rows of 4
+        const cfg = printSettings || {
+            columns: 4,
+            showSerialNo: true,
+            showProduct: true,
+            showWarranty: true,
+            showPurchase: true,
+            showValidity: true
+        };
+
         let qrItems = [];
         selectedBatch.serials.forEach((serial) => {
             const productQR = serial.qrCodes?.find(q => q.qrType === 'product');
             const boxQR = serial.qrCodes?.find(q => q.qrType === 'box');
 
             const detailsHtml = `
-                <div class="d-serial">${serial.serialNo}</div>
-                <div class="d-product">${productName}</div>
-                ${serial.warrantyDesc ? `<div class="d-row"><span class="dk">Warranty</span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' &middot; ' + serial.warrantyTerm : ''}</span></div>` : ''}
-                ${serial.purchaseDate ? `<div class="d-row"><span class="dk">Purchase</span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
-                ${serial.validityDate ? `<div class="d-row"><span class="dk">Valid Till</span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
+                ${cfg.showSerialNo ? `<div class="d-serial">${serial.serialNo}</div>` : ''}
+                ${cfg.showProduct ? `<div class="d-product">${productName}</div>` : ''}
+                ${cfg.showWarranty && serial.warrantyDesc ? `<div class="d-row"><span class="dk">WARRANTY: </span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' ' + serial.warrantyTerm : ''}</span></div>` : ''}
+                ${cfg.showPurchase && serial.purchaseDate ? `<div class="d-row"><span class="dk">PURCHASE: </span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
+                ${cfg.showValidity && serial.validityDate ? `<div class="d-row"><span class="dk">VALID: </span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
             `;
+
             if (productQR) qrItems.push(`
                 <div class="qr-item">
                     <div class="qr-left">
@@ -90,10 +105,9 @@ const BatchDetails = () => {
                 </div>`);
         });
 
-        // 4 items per row
         let rowsHtml = '';
-        for (let i = 0; i < qrItems.length; i += 4) {
-            rowsHtml += `<div class="qr-row">${qrItems.slice(i, i + 4).join('')}</div>`;
+        for (let i = 0; i < qrItems.length; i += cfg.columns) {
+            rowsHtml += `<div class="qr-row">${qrItems.slice(i, i + cfg.columns).join('')}</div>`;
         }
 
         const totalQR = selectedBatch.totalQRCodes || qrItems.length;
@@ -108,12 +122,13 @@ const BatchDetails = () => {
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   @media print {
-    @page { margin: 0.3in; size: A4 portrait; }
+    @page { 
+      margin: 0.5in 0.4in;
+      size: A4 portrait;
+    }
     body { margin: 0; background: #fff; }
-    .no-print { display: none !important; }
-    .screen-header, .screen-footer, .print-btn-container { display: none !important; }
-    .print-content { padding: 0; }
-    .qr-row { break-inside: avoid; page-break-inside: avoid; }
+    .screen-header, .screen-footer { display: none !important; }
+    .print-content { padding: 0 !important; }
   }
 
   body {
@@ -123,101 +138,131 @@ const BatchDetails = () => {
     print-color-adjust: exact;
   }
 
-  /* ── Screen Header ── */
   .screen-header {
-    display: flex; align-items: flex-end; justify-content: space-between;
-    padding: 22px 32px 16px; border-bottom: 2px solid #111; margin-bottom: 4px;
+    display: flex; 
+    align-items: flex-end; 
+    justify-content: space-between;
+    padding: 22px 32px 16px; 
+    border-bottom: 2px solid #111; 
+    margin-bottom: 4px;
   }
   .screen-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
   .screen-header .sub { font-size: 11px; color: #666; margin-top: 3px; }
-  .screen-header .right { display: flex; gap: 15px; align-items: flex-start; }
-  .pills { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
+  .screen-header .pills { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
   .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
   .pill-d { background: #111; color: #fff; }
   .pill-l { background: #f2f2f2; color: #444; }
-  .dt { font-size: 10px; color: #aaa; text-align: right; }
-
-  /* ── Print Button ── */
-  .print-btn-container { display: flex; justify-content: flex-end; padding: 12px 32px 0; }
-  .print-btn {
-    background: #111; color: #fff; border: none;
-    padding: 8px 16px; border-radius: 6px;
-    font-family: 'Sofia Sans', sans-serif; font-size: 13px; font-weight: 600;
-    cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .2s;
+  .screen-header .dt { font-size: 10px; color: #aaa; }
+  .screen-footer { 
+    padding: 12px 32px; 
+    border-top: 1px solid #e0e0e0; 
+    display: flex; 
+    justify-content: space-between; 
+    margin-top: 8px; 
+  }
+  .screen-footer span { font-size: 10px; color: #bbb; }
+  .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+  .print-btn { 
+    background: #111; 
+    color: #fff; 
+    border: none; 
+    padding: 8px 16px; 
+    border-radius: 6px; 
+    font-size: 13px; 
+    font-weight: 600; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
   }
   .print-btn:hover { background: #333; }
   .print-btn svg { width: 15px; height: 15px; }
 
-  /* ── Content ── */
-  .print-content { padding: 20px 32px; }
-
-  /* ── 4-per-row Grid ── */
-  .qr-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 20px;
+  @media print {
+    .screen-header, .screen-footer, .print-btn { display: none !important; }
   }
 
-  /* ── QR Item: left=image, right=details ── */
+  .print-content { padding: 20px 32px; }
+  @media print {
+    .print-content { padding: 0; }
+  }
+
+  .qr-row {
+    display: grid;
+    grid-template-columns: repeat(${cfg.columns}, 1fr);
+    gap: ${cfg.columns === 1 ? '20px' : cfg.columns === 2 ? '18px' : cfg.columns === 3 ? '14px' : '12px'};
+    margin-bottom: ${cfg.columns === 1 ? '24px' : cfg.columns === 2 ? '20px' : '16px'};
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
   .qr-item {
     display: flex;
-    align-items: center;
-    padding: 8px;
-    border-bottom: 1px solid #f0f0f0;
+    align-items: flex-start;
+    gap: ${cfg.columns === 1 ? '16px' : cfg.columns === 2 ? '14px' : '10px'};
+    padding: ${cfg.columns === 1 ? '14px' : cfg.columns === 2 ? '12px' : cfg.columns === 3 ? '10px' : '8px'};
   }
 
   .qr-left {
-    width: 100px; flex-shrink: 0;
-    display: flex; flex-direction: column; align-items: center;
-    gap: 4px; padding-right: 10px;
+    width: ${cfg.columns === 1 ? '110px' : cfg.columns === 2 ? '100px' : cfg.columns === 3 ? '85px' : '75px'};
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
-  .qr-left img { width: 80px; height: 80px; display: block; }
 
-  .type-tag {
-    font-size: 8px; font-weight: 700; padding: 2px 6px;
-    border-radius: 2px; text-transform: uppercase; letter-spacing: 0.3px;
+  .qr-left img {
+    width: 100%;
+    height: auto;
+    display: block;
   }
-  .type-tag.product { background: #111; color: #fff; }
-  .type-tag.box { background: #efefef; color: #555; }
 
-  .qr-right { flex: 1; min-width: 0; }
+  .qr-right { 
+    flex: 1; 
+    min-width: 0;
+    display: flex;
+    margin-top: 10px;
+    flex-direction: column;
+    justify-content: center;
+  }
 
   .d-serial {
     font-family: 'Courier New', monospace;
-    font-size: 10px; font-weight: 700; color: #111;
-    letter-spacing: 0.3px; margin-bottom: 2px;
+    font-size: ${cfg.columns === 1 ? '10px' : cfg.columns === 2 ? '9.5px' : cfg.columns === 3 ? '8.5px' : '8px'};
+    font-weight: 700;
+    color: #111;
+    letter-spacing: 0.2px;
+    margin-bottom: ${cfg.columns <= 2 ? '5px' : '3px'};
+    line-height: 1.2;
   }
-  .d-product {
-    font-size: 11px; font-weight: 600; color: #222; margin-bottom: 4px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .d-row { display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
-  .dk { font-size: 8px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.2px; width: 45px; flex-shrink: 0; }
-  .dv { font-size: 9px; color: #444; word-break: break-word; }
 
-  /* ── Screen Footer ── */
-  .screen-footer {
-    padding: 12px 32px; border-top: 1px solid #e0e0e0;
-    display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+  .d-product { 
+     font-size: ${cfg.columns === 1 ? '11px' : cfg.columns === 2 ? '10.5px' : cfg.columns === 3 ? '9.5px' : '9px'};
+    font-weight: 600;
+    color: #222;
+    margin-bottom: ${cfg.columns <= 2 ? '6px' : '4px'};
+    line-height: 1.2;
   }
-  .screen-footer span { font-size: 10px; color: #bbb; }
-  .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
 
-  @media (max-width: 1100px) {
-    .qr-row {
-      grid-template-columns: repeat(3, 1fr);
-    }
+  .d-row { 
+    display: block;
+    margin-top: -8px;
   }
-  @media (max-width: 800px) {
-    .qr-row {
-      grid-template-columns: repeat(2, 1fr);
-    }
+
+  .dk { 
+    font-size: ${cfg.columns === 1 ? '8.5px' : cfg.columns === 2 ? '7px' : '7.5px'};
+    font-weight: 700;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
   }
-  @media (max-width: 500px) {
-    .qr-row {
-      grid-template-columns: repeat(1, 1fr);
-    }
+
+  .dv { 
+    font-size: ${cfg.columns === 1 ? '7.5px' : cfg.columns === 2 ? '7px' : '6.5px'};
+    color: #333;
+    line-height: 1.4;
+    flex: 1;
   }
 </style>
 </head>
@@ -228,8 +273,8 @@ const BatchDetails = () => {
     <h1>QR Batch #${selectedBatch.batchId}</h1>
     <div class="sub">${productName}</div>
   </div>
-  <div class="right">
-    <div>
+  <div style="display: flex; gap: 15px;">
+    <div style="text-align: right;">
       <div class="pills">
         <span class="pill pill-d">${selectedBatch.totalSerials} Serials</span>
         <span class="pill pill-l">${totalQR} QR Codes</span>
@@ -288,7 +333,6 @@ const BatchDetails = () => {
 
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-                /* BACK BTN */
                 .back-btn {
                     width: 32px; height: 32px;
                     border: 1px solid #e0e0e0; border-radius: 7px;
@@ -297,7 +341,6 @@ const BatchDetails = () => {
                 }
                 .back-btn:hover { border-color: #999; }
 
-                /* DARK BTN */
                 .btn-dark {
                     display: inline-flex; align-items: center; gap: 7px;
                     height: 34px; padding: 0 14px;
@@ -307,7 +350,6 @@ const BatchDetails = () => {
                 }
                 .btn-dark:hover { background: #333; }
 
-                /* OUTLINE BTN */
                 .btn-outline {
                     display: inline-flex; align-items: center; gap: 6px;
                     height: 34px; padding: 0 14px;
@@ -318,14 +360,12 @@ const BatchDetails = () => {
                 }
                 .btn-outline:hover { border-color: #888; color: #111; }
 
-                /* STAT CARD */
                 .stat-card {
                     background: #fff; border: 1px solid #e8e8e8; border-radius: 10px;
                     padding: 14px 16px;
                     display: flex; align-items: center; gap: 12;
                 }
 
-                /* SERIAL LIST */
                 .serial-row {
                     display: flex; align-items: center;
                     padding: 11px 16px;
@@ -353,14 +393,12 @@ const BatchDetails = () => {
                     letter-spacing: 0.3px;
                 }
 
-                /* META PILLS */
                 .meta-pill {
                     display: inline-flex; align-items: center; gap: 4px;
                     background: #f4f4f4; border-radius: 4px;
                     padding: 2px 7px; font-size: 10.5px; font-weight: 600; color: #666;
                 }
 
-                /* QR CARD */
                 .qr-card {
                     border: 1px solid #e8e8e8; border-radius: 9px; overflow: hidden;
                     background: #fff; margin-bottom: 12px;
@@ -395,7 +433,6 @@ const BatchDetails = () => {
                 .dl-btn:hover { border-color: #111; background: #111; }
                 .dl-btn:hover svg { color: #fff !important; }
 
-                /* QR VALUE */
                 .qr-value {
                     padding: 8px 14px 12px;
                     font-size: 10px; color: #bbb;
@@ -404,10 +441,11 @@ const BatchDetails = () => {
                     border-top: 1px solid #f5f5f5;
                 }
 
-                /* FIELD LABEL */
                 .fl { font-size: 10px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
                 .fv { font-size: 12px; font-weight: 600; color: #333; }
             `}</style>
+
+            <PrintSetupModal visible={showPrintSetup} onClose={() => setShowPrintSetup(false)} />
 
             <div className="bd" style={{ minHeight: '100vh', background: '#F5F5F5' }}>
 
@@ -425,6 +463,15 @@ const BatchDetails = () => {
                             <div style={{ fontSize: 12, color: '#aaa', marginTop: 1 }}>{selectedBatch.productName}</div>
                         </div>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                            <Tooltip title="Configure global print layout & labels">
+                                <button
+                                    onClick={() => setShowPrintSetup(true)}
+                                    className="btn-outline"
+                                >
+                                    <Settings size={13} strokeWidth={1.8} />
+                                    Print Setup
+                                </button>
+                            </Tooltip>
                             <button className="btn-outline" onClick={handlePrint}>
                                 <Printer size={13} strokeWidth={1.8} />
                                 Print All
@@ -463,7 +510,6 @@ const BatchDetails = () => {
 
                         {/* ── Serial List ── */}
                         <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 10, overflow: 'hidden' }}>
-                            {/* List header */}
                             <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <div style={{ width: 28, height: 28, background: '#f4f4f4', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -476,7 +522,6 @@ const BatchDetails = () => {
                                 </span>
                             </div>
 
-                            {/* Rows */}
                             <div>
                                 {selectedBatch.serials?.map((serial, index) => (
                                     <div
@@ -489,7 +534,6 @@ const BatchDetails = () => {
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div className="serial-no">{serial.serialNo}</div>
 
-                                            {/* Meta info inline */}
                                             {(serial.warrantyDesc || serial.purchaseDate || serial.validityDate) && (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
                                                     {serial.warrantyDesc && (
@@ -511,7 +555,6 @@ const BatchDetails = () => {
                                             )}
                                         </div>
 
-                                        {/* QR count badge */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                                             <QrCode size={12} strokeWidth={1.8} style={{ color: '#ccc' }} />
                                             <span style={{ fontSize: 11, fontWeight: 600, color: '#bbb' }}>{serial.qrCodes?.length || 0}</span>
@@ -524,7 +567,6 @@ const BatchDetails = () => {
                         {/* ── QR Preview Panel (sticky) ── */}
                         <div style={{ position: 'sticky', top: 20 }}>
                             <div style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 10, overflow: 'hidden' }}>
-                                {/* Panel header */}
                                 <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <div style={{ width: 28, height: 28, background: '#f4f4f4', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <QrCode size={14} strokeWidth={1.8} style={{ color: '#777' }} />
@@ -540,7 +582,6 @@ const BatchDetails = () => {
                                 {selectedSerial ? (
                                     <div style={{ padding: '14px 14px' }}>
 
-                                        {/* Serial info summary */}
                                         <div style={{ background: '#fafafa', border: '1px solid #ebebeb', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
                                             <div style={{ fontFamily: 'Courier New, monospace', fontSize: 11, fontWeight: 700, color: '#111', marginBottom: 6, letterSpacing: '0.3px' }}>
                                                 {selectedSerial.serialNo}
@@ -573,7 +614,6 @@ const BatchDetails = () => {
                                             </div>
                                         </div>
 
-                                        {/* QR Cards */}
                                         {selectedSerial.qrCodes?.map((qr, idx) => (
                                             <div key={idx} className="qr-card">
                                                 <div className={`qr-stripe${qr.qrType === 'box' ? ' box' : ''}`} />
@@ -604,7 +644,6 @@ const BatchDetails = () => {
                                             </div>
                                         ))}
 
-                                        {/* QR URL link */}
                                         {selectedSerial.qrcodeUrl && (
                                             <a
                                                 href={selectedSerial.qrcodeUrl}
