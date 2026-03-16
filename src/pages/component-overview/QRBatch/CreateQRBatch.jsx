@@ -21,6 +21,26 @@ import dayjs from 'dayjs';
 import { getUserData } from '../../../utils/authUtils';
 import PrintSetupModal from './PrintSetupModal';
 
+// ── DAYS OPTIONS for validity offset ──
+const DAYS_OPTIONS = [
+    { label: '20 Days', value: 20 },
+    { label: '30 Days', value: 30 },
+    { label: '33 Days', value: 33 },
+    { label: '60 Days', value: 60 },
+    { label: '90 Days', value: 90 },
+    { label: '180 Days', value: 180 },
+    { label: '1 Year (365)', value: 365 },
+    { label: 'Custom', value: 'custom' },
+];
+
+// ── HELPER: compute validity date from purchase date + days ──
+const computeValidityDate = (purchaseDate, days) => {
+    if (!days || !purchaseDate) return '';
+    const d = parseInt(days);
+    if (isNaN(d) || d <= 0) return '';
+    return dayjs(purchaseDate).add(d, 'day').format('YYYY-MM-DD');
+};
+
 const CreateQRBatch = () => {
     const dispatch = useDispatch();
     const { userId } = getUserData();
@@ -35,13 +55,21 @@ const CreateQRBatch = () => {
     const [serialItems, setSerialItems] = useState([]);
     const [showPrintSetup, setShowPrintSetup] = useState(false);
 
-    // ── BULK WARRANTY DATA (applies to all rows) ──
+    // ── BULK WARRANTY DATA ──
     const [bulkWarranty, setBulkWarranty] = useState({
         warrantyDesc: '',
         warrantyTerm: '',
         purchaseDate: dayjs().format('YYYY-MM-DD'),
         validityDate: ''
     });
+
+    // ── BULK DAYS OFFSET STATE ──
+    const [bulkDaysMode, setBulkDaysMode] = useState('');       // '' | number | 'custom'
+    const [bulkCustomDays, setBulkCustomDays] = useState('');   // custom integer string
+
+    // ── PER-ROW DAYS OFFSET STATE ──
+    const [rowDaysMode, setRowDaysMode] = useState({});         // { [index]: value }
+    const [rowCustomDays, setRowCustomDays] = useState({});     // { [index]: string }
 
     useEffect(() => {
         dispatch(Fetch_Products());
@@ -62,17 +90,23 @@ const CreateQRBatch = () => {
                 purchaseDate: bulkWarranty.purchaseDate,
                 validityDate: bulkWarranty.validityDate
             })));
+            // Reset row days state
+            setRowDaysMode({});
+            setRowCustomDays({});
         } catch {
             message.error('Failed to generate serial numbers');
         }
     };
 
+    // ── FIX: integer only for quantity ──
     const handleQuantityChange = async (newQty) => {
-        if (!newQty || newQty <= 0) { setQuantity(1); return; }
-        if (newQty > 100) { message.error('Maximum 100 items per batch'); setQuantity(100); return; }
-        setQuantity(newQty);
+        // Force integer
+        const intQty = newQty ? Math.floor(Number(newQty)) : 1;
+        if (!intQty || intQty <= 0) { setQuantity(1); return; }
+        if (intQty > 100) { message.error('Maximum 100 items per batch'); setQuantity(100); return; }
+        setQuantity(intQty);
         try {
-            const serials = await dispatch(Generate_Serial_Numbers(newQty));
+            const serials = await dispatch(Generate_Serial_Numbers(intQty));
             setSerialItems(serials.map((s) => ({
                 serialNo: s,
                 warrantyDesc: bulkWarranty.warrantyDesc,
@@ -80,6 +114,9 @@ const CreateQRBatch = () => {
                 purchaseDate: bulkWarranty.purchaseDate,
                 validityDate: bulkWarranty.validityDate
             })));
+            // Reset row days state when qty changes
+            setRowDaysMode({});
+            setRowCustomDays({});
         } catch {
             message.error('Failed to generate serial numbers');
         }
@@ -88,6 +125,41 @@ const CreateQRBatch = () => {
     // ── BULK WARRANTY HANDLERS ──
     const handleBulkWarrantyChange = (field, value) => {
         setBulkWarranty(prev => ({ ...prev, [field]: value }));
+    };
+
+    // When bulk purchase date changes, recompute validity if days mode is set
+    const handleBulkPurchaseDateChange = (date) => {
+        const dateStr = date ? date.format('YYYY-MM-DD') : '';
+        setBulkWarranty(prev => {
+            const newState = { ...prev, purchaseDate: dateStr };
+            // Recompute validity if days mode active
+            if (bulkDaysMode && bulkDaysMode !== 'custom') {
+                newState.validityDate = computeValidityDate(dateStr, bulkDaysMode);
+            } else if (bulkDaysMode === 'custom' && bulkCustomDays) {
+                newState.validityDate = computeValidityDate(dateStr, bulkCustomDays);
+            }
+            return newState;
+        });
+    };
+
+    // Handle bulk days mode change
+    const handleBulkDaysModeChange = (val) => {
+        setBulkDaysMode(val);
+        if (val !== 'custom') {
+            const vDate = computeValidityDate(bulkWarranty.purchaseDate, val);
+            handleBulkWarrantyChange('validityDate', vDate);
+        } else {
+            // custom selected, clear validity until user types
+            handleBulkWarrantyChange('validityDate', '');
+        }
+    };
+
+    // Handle bulk custom days input
+    const handleBulkCustomDaysChange = (val) => {
+        const d = val ? Math.floor(Number(val)) : '';
+        setBulkCustomDays(d);
+        const vDate = computeValidityDate(bulkWarranty.purchaseDate, d);
+        handleBulkWarrantyChange('validityDate', vDate);
     };
 
     const applyBulkToAll = () => {
@@ -99,6 +171,17 @@ const CreateQRBatch = () => {
             validityDate: bulkWarranty.validityDate
         }));
         setSerialItems(updated);
+
+        // Sync row days mode to match bulk
+        const newRowModes = {};
+        const newRowCustom = {};
+        serialItems.forEach((_, i) => {
+            newRowModes[i] = bulkDaysMode;
+            newRowCustom[i] = bulkCustomDays;
+        });
+        setRowDaysMode(newRowModes);
+        setRowCustomDays(newRowCustom);
+
         message.success(`Bulk warranty data applied to all ${serialItems.length} serial(s)`);
     };
 
@@ -108,10 +191,62 @@ const CreateQRBatch = () => {
         setSerialItems(updated);
     };
 
+    // When per-row purchase date changes, recompute validity if days mode set for that row
+    const handleRowPurchaseDateChange = (index, date) => {
+        const dateStr = date ? date.format('YYYY-MM-DD') : '';
+        handleSerialItemChange(index, 'purchaseDate', dateStr);
+        // Recompute validity if row has days mode
+        const mode = rowDaysMode[index];
+        if (mode && mode !== 'custom') {
+            const vDate = computeValidityDate(dateStr, mode);
+            handleSerialItemChange(index, 'validityDate', vDate);
+        } else if (mode === 'custom' && rowCustomDays[index]) {
+            const vDate = computeValidityDate(dateStr, rowCustomDays[index]);
+            handleSerialItemChange(index, 'validityDate', vDate);
+        }
+    };
+
+    // Handle per-row days mode change
+    const handleRowDaysModeChange = (index, val) => {
+        const updated = { ...rowDaysMode, [index]: val };
+        setRowDaysMode(updated);
+        if (val !== 'custom') {
+            const vDate = computeValidityDate(serialItems[index]?.purchaseDate, val);
+            handleSerialItemChange(index, 'validityDate', vDate);
+            setRowCustomDays(prev => ({ ...prev, [index]: '' }));
+        } else {
+            // custom selected, clear validity until user types
+            handleSerialItemChange(index, 'validityDate', '');
+        }
+    };
+
+    // Handle per-row custom days input
+    const handleRowCustomDaysChange = (index, val) => {
+        const d = val ? Math.floor(Number(val)) : '';
+        setRowCustomDays(prev => ({ ...prev, [index]: d }));
+        const vDate = computeValidityDate(serialItems[index]?.purchaseDate, d);
+        handleSerialItemChange(index, 'validityDate', vDate);
+    };
+
     const handleRemoveItem = (index) => {
         const updated = serialItems.filter((_, i) => i !== index);
         setSerialItems(updated);
         setQuantity(updated.length);
+        // Clean up row states for removed index
+        const newRowModes = {};
+        const newRowCustom = {};
+        Object.keys(rowDaysMode).forEach(k => {
+            const ki = parseInt(k);
+            if (ki < index) { newRowModes[ki] = rowDaysMode[ki]; }
+            else if (ki > index) { newRowModes[ki - 1] = rowDaysMode[ki]; }
+        });
+        Object.keys(rowCustomDays).forEach(k => {
+            const ki = parseInt(k);
+            if (ki < index) { newRowCustom[ki] = rowCustomDays[ki]; }
+            else if (ki > index) { newRowCustom[ki - 1] = rowCustomDays[ki]; }
+        });
+        setRowDaysMode(newRowModes);
+        setRowCustomDays(newRowCustom);
     };
 
     const handleGeneratePreview = async () => {
@@ -174,7 +309,6 @@ const CreateQRBatch = () => {
         const batchDate = dayjs().format('DD MMM YYYY');
         const cfg = printSettings || { columns: 4, showSerialNo: true, showProduct: true, showWarranty: true, showPurchase: true, showValidity: true };
 
-        // Collect all QR items with GLOBAL print settings
         let qrItems = [];
         previewData.serials.forEach((serial) => {
             const productQR = serial.qrCodes?.find(q => q.qrType === 'product');
@@ -210,7 +344,6 @@ const CreateQRBatch = () => {
             }
         });
 
-        // Split items into rows based on GLOBAL columns setting
         let rowsHtml = '';
         for (let i = 0; i < qrItems.length; i += cfg.columns) {
             const rowItems = qrItems.slice(i, i + cfg.columns);
@@ -225,32 +358,21 @@ const CreateQRBatch = () => {
 <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  
   @media print {
-    @page { 
-      margin: 0.5in 0.4in;
-      size: A4 portrait;
-    }
+    @page { margin: 0.5in 0.4in; size: A4 portrait; }
     body { margin: 0; background: #fff; }
     .screen-header, .screen-footer { display: none !important; }
     .print-content { padding: 0 !important; }
   }
-  
   body {
     font-family: 'Sofia Sans', sans-serif;
-    background: #fff; 
-    color: #111;
+    background: #fff; color: #111;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-
   .screen-header {
-    display: flex; 
-    align-items: flex-end; 
-    justify-content: space-between;
-    padding: 22px 32px 16px; 
-    border-bottom: 2px solid #111; 
-    margin-bottom: 4px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 22px 32px 16px; border-bottom: 2px solid #111; margin-bottom: 4px;
   }
   .screen-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
   .screen-header .sub { font-size: 11px; color: #666; margin-top: 3px; }
@@ -259,117 +381,61 @@ const CreateQRBatch = () => {
   .pill-d { background: #111; color: #fff; }
   .pill-l { background: #f2f2f2; color: #444; }
   .screen-header .dt { font-size: 10px; color: #aaa; }
-  .screen-footer { 
-    padding: 12px 32px; 
-    border-top: 1px solid #e0e0e0; 
-    display: flex; 
-    justify-content: space-between; 
-    margin-top: 8px; 
+  .screen-footer {
+    padding: 12px 32px; border-top: 1px solid #e0e0e0;
+    display: flex; justify-content: space-between; margin-top: 8px;
   }
   .screen-footer span { font-size: 10px; color: #bbb; }
   .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
-  .print-btn { 
-    background: #111; 
-    color: #fff; 
-    border: none; 
-    padding: 8px 16px; 
-    border-radius: 6px; 
-    font-size: 13px; 
-    font-weight: 600; 
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    gap: 8px; 
+  .print-btn {
+    background: #111; color: #fff; border: none;
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
   }
   .print-btn:hover { background: #333; }
   .print-btn svg { width: 15px; height: 15px; }
-
   @media print {
     .screen-header, .screen-footer, .print-btn { display: none !important; }
   }
-
   .print-content { padding: 20px 32px; }
-  @media print {
-    .print-content { padding: 0; }
-  }
-
-  /* ── PROPER PRINT LAYOUT ── */
+  @media print { .print-content { padding: 0; } }
   .qr-row {
     display: grid;
     grid-template-columns: repeat(${cfg.columns}, 1fr);
     gap: ${cfg.columns === 1 ? '20px' : cfg.columns === 2 ? '18px' : cfg.columns === 3 ? '14px' : '12px'};
     margin-bottom: ${cfg.columns === 1 ? '24px' : cfg.columns === 2 ? '20px' : '16px'};
-    page-break-inside: avoid;
-    break-inside: avoid;
+    page-break-inside: avoid; break-inside: avoid;
   }
-
   .qr-item {
-    display: flex;
-    align-items: flex-start;
+    display: flex; align-items: flex-start;
     gap: ${cfg.columns === 1 ? '16px' : cfg.columns === 2 ? '14px' : '10px'};
     padding: ${cfg.columns === 1 ? '14px' : cfg.columns === 2 ? '12px' : cfg.columns === 3 ? '10px' : '8px'};
   }
-
   .qr-left {
     width: ${cfg.columns === 1 ? '110px' : cfg.columns === 2 ? '100px' : cfg.columns === 3 ? '85px' : '75px'};
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
   }
-
-  .qr-left img {
-    width: 100%;
-    height: auto;
-    display: block;
-  }
-
-  .qr-right { 
-    flex: 1; 
-    min-width: 0;
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
+  .qr-left img { width: 100%; height: auto; display: block; }
+  .qr-right { flex: 1; min-width: 0; margin-top: 10px; display: flex; flex-direction: column; justify-content: center; }
   .d-serial {
     font-family: 'Courier New', monospace;
     font-size: ${cfg.columns === 1 ? '10px' : cfg.columns === 2 ? '9.5px' : cfg.columns === 3 ? '8.5px' : '8px'};
-    font-weight: 700;
-    color: #111;
-    letter-spacing: 0.3px;
-    margin-bottom: ${cfg.columns <= 2 ? '5px' : '4px'};
-    line-height: 1.3;
+    font-weight: 700; color: #111; letter-spacing: 0.3px;
+    margin-bottom: ${cfg.columns <= 2 ? '5px' : '4px'}; line-height: 1.3;
   }
-
-  .d-product { 
+  .d-product {
     font-size: ${cfg.columns === 1 ? '11px' : cfg.columns === 2 ? '10.5px' : cfg.columns === 3 ? '9.5px' : '9px'};
-    font-weight: 600;
-    color: #222;
-    margin-bottom: ${cfg.columns <= 2 ? '6px' : '5px'};
-    line-height: 1.3;
+    font-weight: 600; color: #222;
+    margin-bottom: ${cfg.columns <= 2 ? '6px' : '5px'}; line-height: 1.3;
   }
-
-  .d-row { 
-    display: block;
-    margin-top: -5px;
-  }
-
-  .dk { 
+  .d-row { display: block; margin-top: -5px; }
+  .dk {
     font-size: ${cfg.columns === 1 ? '8.5px' : cfg.columns === 2 ? '7px' : '7.5px'};
-    font-weight: 700;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    flex-shrink: 0;
+    font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0;
   }
-
-  .dv { 
+  .dv {
     font-size: ${cfg.columns === 1 ? '7.5px' : cfg.columns === 2 ? '7px' : '6.5px'};
-    color: #333;
-    line-height: 1.4;
-    flex: 1;
+    color: #333; line-height: 1.4; flex: 1;
   }
 </style>
 </head>
@@ -395,22 +461,15 @@ const CreateQRBatch = () => {
     </button>
   </div>
 </div>
-
 <div class="print-content">
   ${rowsHtml || '<div style="text-align:center;padding:40px;">No QR codes to display</div>'}
 </div>
-
 <div class="screen-footer">
   <span>Batch Print &middot; ${batchDate}</span>
   <span class="brand">QR Batch System</span>
   <span>Total: ${previewData.totalQRCodes || qrItems.length} codes</span>
 </div>
-
-<script>
-window.onload = function() { 
-  window.print();
-};
-</script>
+<script>window.onload = function() { window.print(); };</script>
 </body>
 </html>`;
 
@@ -473,7 +532,7 @@ window.onload = function() {
                 .stbl thead th:last-child { width: 36px; }
                 .stbl tbody tr { border-bottom: 1px solid #f4f4f4; }
                 .stbl tbody tr:last-child { border-bottom: none; }
-                .stbl tbody td { padding: 8px 8px; vertical-align: middle; }
+                .stbl tbody td { padding: 8px 8px; vertical-align: top; }
                 .stbl tbody td:first-child { padding-left: 0; }
 
                 .prev-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -556,6 +615,17 @@ window.onload = function() {
                     color: #856404;
                     line-height: 1.5;
                 }
+
+                /* validity date preview badge */
+                .validity-preview {
+                    font-size: 10px;
+                    color: #3a9e60;
+                    margin-top: 4px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 3px;
+                }
             `}</style>
 
             <PrintSetupModal visible={showPrintSetup} onClose={() => setShowPrintSetup(false)} />
@@ -582,29 +652,15 @@ window.onload = function() {
                                 <button
                                     onClick={() => setShowPrintSetup(true)}
                                     style={{
-                                        height: 34,
-                                        padding: '0 14px',
-                                        border: '1px solid #e0e0e0',
-                                        borderRadius: 7,
-                                        background: '#fff',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 7,
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        color: '#555',
-                                        fontFamily: 'Sofia Sans, sans-serif',
-                                        transition: 'all .12s'
+                                        height: 34, padding: '0 14px',
+                                        border: '1px solid #e0e0e0', borderRadius: 7,
+                                        background: '#fff', cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: 7,
+                                        fontSize: 12, fontWeight: 600, color: '#555',
+                                        fontFamily: 'Sofia Sans, sans-serif', transition: 'all .12s'
                                     }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.borderColor = '#999';
-                                        e.currentTarget.style.color = '#111';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.borderColor = '#e0e0e0';
-                                        e.currentTarget.style.color = '#555';
-                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#999'; e.currentTarget.style.color = '#111'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.color = '#555'; }}
                                 >
                                     <Settings size={14} strokeWidth={1.8} />
                                     Print Setup
@@ -643,14 +699,21 @@ window.onload = function() {
                                 </div>
                                 <div>
                                     <label style={fieldLabel}>Quantity <span style={{ color: '#e53535' }}>*</span></label>
+                                    {/* FIX: precision=0 + parser ensures only integers */}
                                     <InputNumber
                                         size="medium"
-                                        min={1} max={100}
+                                        min={1}
+                                        max={100}
                                         value={quantity}
                                         onChange={handleQuantityChange}
                                         placeholder="1"
                                         disabled={!selectedProduct}
                                         style={{ width: '100%' }}
+                                        precision={0}
+                                        parser={(value) => {
+                                            const parsed = parseInt((value || '').replace(/[^\d]/g, ''), 10);
+                                            return isNaN(parsed) ? 1 : parsed;
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -706,27 +769,58 @@ window.onload = function() {
                                             <DatePicker
                                                 size="medium"
                                                 value={bulkWarranty.purchaseDate ? dayjs(bulkWarranty.purchaseDate) : null}
-                                                onChange={(date) => handleBulkWarrantyChange('purchaseDate', date ? date.format('YYYY-MM-DD') : '')}
+                                                onChange={handleBulkPurchaseDateChange}
                                                 format="DD MMM YYYY"
                                                 style={{ width: '100%' }}
                                             />
                                         </div>
+
+                                        {/* ── FIX: Validity Date with Days Offset Dropdown ── */}
                                         <div>
-                                            <label style={fieldLabel}>Validity Date</label>
-                                            <DatePicker
-                                                size="medium"
-                                                value={bulkWarranty.validityDate ? dayjs(bulkWarranty.validityDate) : null}
-                                                onChange={(date) => handleBulkWarrantyChange('validityDate', date ? date.format('YYYY-MM-DD') : '')}
-                                                format="DD MMM YYYY"
-                                                style={{ width: '100%' }}
-                                            />
+                                            <label style={fieldLabel}>Validity Date (Days from Purchase)</label>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <Select
+                                                    size="middle"
+                                                    placeholder="Select days offset"
+                                                    value={bulkDaysMode || undefined}
+                                                    onChange={handleBulkDaysModeChange}
+                                                    options={DAYS_OPTIONS}
+                                                    style={{ flex: 1 }}
+                                                    allowClear
+                                                    onClear={() => {
+                                                        setBulkDaysMode('');
+                                                        setBulkCustomDays('');
+                                                        handleBulkWarrantyChange('validityDate', '');
+                                                    }}
+                                                />
+                                                {bulkDaysMode === 'custom' && (
+                                                    <InputNumber
+                                                        size="middle"
+                                                        min={1}
+                                                        precision={0}
+                                                        parser={(v) => {
+                                                            const parsed = parseInt((v || '').replace(/[^\d]/g, ''), 10);
+                                                            return isNaN(parsed) ? 1 : parsed;
+                                                        }}
+                                                        placeholder="Days"
+                                                        value={bulkCustomDays || undefined}
+                                                        onChange={handleBulkCustomDaysChange}
+                                                        style={{ width: 90 }}
+                                                    />
+                                                )}
+                                            </div>
+                                            {bulkWarranty.validityDate && (
+                                                <div className="validity-preview">
+                                                     {dayjs(bulkWarranty.validityDate).format('DD MMM YYYY')}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
                                     <div className="bulk-notice">
                                         <AlertCircle size={14} strokeWidth={2} color="#856404" style={{ flexShrink: 0, marginTop: 1 }} />
                                         <div className="bulk-notice-text">
-                                            <strong>How it works:</strong> Fill warranty data above, click "Apply to All" to populate all serial rows. You can still edit individual serial rows below if needed.
+                                            <strong>How it works:</strong> Select days offset — validity date is auto-calculated from purchase date. Click "Apply to All" to populate all serial rows. You can still edit individual rows below.
                                         </div>
                                     </div>
                                 </div>
@@ -755,7 +849,7 @@ window.onload = function() {
                                                 <th>Warranty Desc</th>
                                                 <th>Warranty Term</th>
                                                 <th>Purchase Date</th>
-                                                <th>Validity Date</th>
+                                                <th>Validity (Days)</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
@@ -789,19 +883,52 @@ window.onload = function() {
                                                     <td>
                                                         <DatePicker size="medium"
                                                             value={item.purchaseDate ? dayjs(item.purchaseDate) : null}
-                                                            onChange={(date) => handleSerialItemChange(index, 'purchaseDate', date ? date.format('YYYY-MM-DD') : '')}
+                                                            onChange={(date) => handleRowPurchaseDateChange(index, date)}
                                                             format="DD MMM YYYY"
                                                             style={{ minWidth: 130 }}
                                                         />
                                                     </td>
+
+                                                    {/* ── FIX: Per-row Validity Days Dropdown ── */}
                                                     <td>
-                                                        <DatePicker size="medium"
-                                                            value={item.validityDate ? dayjs(item.validityDate) : null}
-                                                            onChange={(date) => handleSerialItemChange(index, 'validityDate', date ? date.format('YYYY-MM-DD') : '')}
-                                                            format="DD MMM YYYY"
-                                                            style={{ minWidth: 130 }}
-                                                        />
+                                                        <div style={{ display: 'flex', gap: 5, minWidth: 210 }}>
+                                                            <Select
+                                                                size="middle"
+                                                                placeholder="Select days"
+                                                                value={rowDaysMode[index] || undefined}
+                                                                onChange={(val) => handleRowDaysModeChange(index, val)}
+                                                                options={DAYS_OPTIONS}
+                                                                style={{ width: 135 }}
+                                                                allowClear
+                                                                onClear={() => {
+                                                                    setRowDaysMode(prev => ({ ...prev, [index]: '' }));
+                                                                    setRowCustomDays(prev => ({ ...prev, [index]: '' }));
+                                                                    handleSerialItemChange(index, 'validityDate', '');
+                                                                }}
+                                                            />
+                                                            {rowDaysMode[index] === 'custom' && (
+                                                                <InputNumber
+                                                                    size="middle"
+                                                                    min={1}
+                                                                    precision={0}
+                                                                    parser={(v) => {
+                                                                        const parsed = parseInt((v || '').replace(/[^\d]/g, ''), 10);
+                                                                        return isNaN(parsed) ? 1 : parsed;
+                                                                    }}
+                                                                    placeholder="Days"
+                                                                    value={rowCustomDays[index] || undefined}
+                                                                    onChange={(val) => handleRowCustomDaysChange(index, val)}
+                                                                    style={{ width: 70 }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        {item.validityDate && (
+                                                            <div className="validity-preview" style={{ marginTop: 3 }}>
+                                                                 {dayjs(item.validityDate).format('DD MMM YYYY')}
+                                                            </div>
+                                                        )}
                                                     </td>
+
                                                     <td>
                                                         <Button type="text" danger size="small"
                                                             icon={<Trash2 size={13} strokeWidth={1.8} />}
