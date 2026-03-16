@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,11 +12,10 @@ import { Fetch_Print_Settings } from '../../../Redux/Action/PrintSettingsAction/
 import {
     ArrowLeft, Trash2, Package, Eye, Save,
     CheckCircle2, QrCode as QrCodeIcon, Download,
-    Box, Printer, Hash, Settings, Copy, AlertCircle,
-    AlertTriangle, Lock, ShieldCheck
+    Box, Printer, Hash, Settings, Copy, AlertCircle
 } from 'lucide-react';
 import {
-    Select, InputNumber, Input, DatePicker, Button, message, Tooltip, Modal
+    Select, InputNumber, Input, DatePicker, Button, message, Tooltip
 } from 'antd';
 import dayjs from 'dayjs';
 import { getUserData } from '../../../utils/authUtils';
@@ -56,18 +55,6 @@ const CreateQRBatch = () => {
     const [serialItems, setSerialItems] = useState([]);
     const [showPrintSetup, setShowPrintSetup] = useState(false);
 
-    // ── SAVE STATE TRACKING ──
-    // isSaved: true only after Confirm & Save succeeds
-    // previewGenerated: true after preview is generated (but not yet saved)
-    const [isSaved, setIsSaved] = useState(false);
-    const [previewGenerated, setPreviewGenerated] = useState(false);
-
-    // ── UNSAVED LEAVE WARNING MODAL ──
-    const [leaveWarningModal, setLeaveWarningModal] = useState(false);
-
-    // ── PRINT BLOCKED MODAL (shown when user tries to print without saving) ──
-    const [printBlockedModal, setPrintBlockedModal] = useState(false);
-
     // ── BULK WARRANTY DATA ──
     const [bulkWarranty, setBulkWarranty] = useState({
         warrantyDesc: '',
@@ -77,59 +64,23 @@ const CreateQRBatch = () => {
     });
 
     // ── BULK DAYS OFFSET STATE ──
-    const [bulkDaysMode, setBulkDaysMode] = useState('');
-    const [bulkCustomDays, setBulkCustomDays] = useState('');
+    const [bulkDaysMode, setBulkDaysMode] = useState('');       // '' | number | 'custom'
+    const [bulkCustomDays, setBulkCustomDays] = useState('');   // custom integer string
 
     // ── PER-ROW DAYS OFFSET STATE ──
-    const [rowDaysMode, setRowDaysMode] = useState({});
-    const [rowCustomDays, setRowCustomDays] = useState({});
+    const [rowDaysMode, setRowDaysMode] = useState({});         // { [index]: value }
+    const [rowCustomDays, setRowCustomDays] = useState({});     // { [index]: string }
 
     useEffect(() => {
         dispatch(Fetch_Products());
         dispatch(Fetch_Print_Settings());
-    }, [dispatch]);
-
-    useEffect(() => {
         dispatch(Clear_QR_Preview());
-    }, []);
-
-    // ── UNSAVED CHANGES: browser back/refresh warning ──
-    // Only warn if something was generated but not saved
-    useEffect(() => {
-        const hasUnsavedWork = previewGenerated && !isSaved;
-
-        const handleBeforeUnload = (e) => {
-            if (hasUnsavedWork) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        };
-
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [previewGenerated, isSaved]);
-
-    // ── BACK BUTTON HANDLER with unsaved warning ──
-    const handleGoBack = () => {
-        if (previewGenerated && !isSaved) {
-            setLeaveWarningModal(true);
-        } else {
-            navigate('/qr-batch');
-        }
-    };
-
-    // Confirm leave anyway
-    const handleConfirmLeave = () => {
-        setLeaveWarningModal(false);
-        navigate('/qr-batch');
-    };
+    }, [dispatch]);
 
     // Auto-set qty=1 and generate 1 serial when product selected
     const handleProductChange = async (value) => {
         setSelectedProduct(value);
         setQuantity(1);
-        setIsSaved(false);
-        setPreviewGenerated(false);
         try {
             const serials = await dispatch(Generate_Serial_Numbers(1));
             setSerialItems(serials.map((s) => ({
@@ -139,6 +90,7 @@ const CreateQRBatch = () => {
                 purchaseDate: bulkWarranty.purchaseDate,
                 validityDate: bulkWarranty.validityDate
             })));
+            // Reset row days state
             setRowDaysMode({});
             setRowCustomDays({});
         } catch {
@@ -146,14 +98,13 @@ const CreateQRBatch = () => {
         }
     };
 
+    // ── FIX: integer only for quantity ──
     const handleQuantityChange = async (newQty) => {
+        // Force integer
         const intQty = newQty ? Math.floor(Number(newQty)) : 1;
         if (!intQty || intQty <= 0) { setQuantity(1); return; }
         if (intQty > 100) { message.error('Maximum 100 items per batch'); setQuantity(100); return; }
         setQuantity(intQty);
-        // Reset save/preview state when qty changes
-        setIsSaved(false);
-        setPreviewGenerated(false);
         try {
             const serials = await dispatch(Generate_Serial_Numbers(intQty));
             setSerialItems(serials.map((s) => ({
@@ -163,6 +114,7 @@ const CreateQRBatch = () => {
                 purchaseDate: bulkWarranty.purchaseDate,
                 validityDate: bulkWarranty.validityDate
             })));
+            // Reset row days state when qty changes
             setRowDaysMode({});
             setRowCustomDays({});
         } catch {
@@ -175,10 +127,12 @@ const CreateQRBatch = () => {
         setBulkWarranty(prev => ({ ...prev, [field]: value }));
     };
 
+    // When bulk purchase date changes, recompute validity if days mode is set
     const handleBulkPurchaseDateChange = (date) => {
         const dateStr = date ? date.format('YYYY-MM-DD') : '';
         setBulkWarranty(prev => {
             const newState = { ...prev, purchaseDate: dateStr };
+            // Recompute validity if days mode active
             if (bulkDaysMode && bulkDaysMode !== 'custom') {
                 newState.validityDate = computeValidityDate(dateStr, bulkDaysMode);
             } else if (bulkDaysMode === 'custom' && bulkCustomDays) {
@@ -188,16 +142,19 @@ const CreateQRBatch = () => {
         });
     };
 
+    // Handle bulk days mode change
     const handleBulkDaysModeChange = (val) => {
         setBulkDaysMode(val);
         if (val !== 'custom') {
             const vDate = computeValidityDate(bulkWarranty.purchaseDate, val);
             handleBulkWarrantyChange('validityDate', vDate);
         } else {
+            // custom selected, clear validity until user types
             handleBulkWarrantyChange('validityDate', '');
         }
     };
 
+    // Handle bulk custom days input
     const handleBulkCustomDaysChange = (val) => {
         const d = val ? Math.floor(Number(val)) : '';
         setBulkCustomDays(d);
@@ -215,6 +172,7 @@ const CreateQRBatch = () => {
         }));
         setSerialItems(updated);
 
+        // Sync row days mode to match bulk
         const newRowModes = {};
         const newRowCustom = {};
         serialItems.forEach((_, i) => {
@@ -233,9 +191,11 @@ const CreateQRBatch = () => {
         setSerialItems(updated);
     };
 
+    // When per-row purchase date changes, recompute validity if days mode set for that row
     const handleRowPurchaseDateChange = (index, date) => {
         const dateStr = date ? date.format('YYYY-MM-DD') : '';
         handleSerialItemChange(index, 'purchaseDate', dateStr);
+        // Recompute validity if row has days mode
         const mode = rowDaysMode[index];
         if (mode && mode !== 'custom') {
             const vDate = computeValidityDate(dateStr, mode);
@@ -246,6 +206,7 @@ const CreateQRBatch = () => {
         }
     };
 
+    // Handle per-row days mode change
     const handleRowDaysModeChange = (index, val) => {
         const updated = { ...rowDaysMode, [index]: val };
         setRowDaysMode(updated);
@@ -254,10 +215,12 @@ const CreateQRBatch = () => {
             handleSerialItemChange(index, 'validityDate', vDate);
             setRowCustomDays(prev => ({ ...prev, [index]: '' }));
         } else {
+            // custom selected, clear validity until user types
             handleSerialItemChange(index, 'validityDate', '');
         }
     };
 
+    // Handle per-row custom days input
     const handleRowCustomDaysChange = (index, val) => {
         const d = val ? Math.floor(Number(val)) : '';
         setRowCustomDays(prev => ({ ...prev, [index]: d }));
@@ -269,9 +232,7 @@ const CreateQRBatch = () => {
         const updated = serialItems.filter((_, i) => i !== index);
         setSerialItems(updated);
         setQuantity(updated.length);
-        // Reset save/preview state since items changed
-        setIsSaved(false);
-        setPreviewGenerated(false);
+        // Clean up row states for removed index
         const newRowModes = {};
         const newRowCustom = {};
         Object.keys(rowDaysMode).forEach(k => {
@@ -301,10 +262,7 @@ const CreateQRBatch = () => {
                     validityDate: item.validityDate || null
                 }))
             }));
-            // Mark preview as generated, but NOT saved yet
-            setPreviewGenerated(true);
-            setIsSaved(false);
-            message.success('Preview generated — please Confirm & Save before printing');
+            message.success('Preview generated');
             setTimeout(() => {
                 document.getElementById('qr-preview-section')?.scrollIntoView({ behavior: 'smooth' });
             }, 300);
@@ -323,12 +281,8 @@ const CreateQRBatch = () => {
                 })),
                 createdBy: userId
             }));
-            // Mark as saved — now print is allowed
-            setIsSaved(true);
-            message.success('Batch saved successfully! You can now print.');
-            setTimeout(() => {
-                document.getElementById('qr-preview-section')?.scrollIntoView({ behavior: 'smooth' });
-            }, 200);
+            message.success('Batch saved successfully');
+            navigate('/qr-batch');
         } catch { }
     };
 
@@ -345,14 +299,7 @@ const CreateQRBatch = () => {
         }
     };
 
-    // ── PRINT: only allowed after isSaved ──
     const handlePrint = () => {
-        // BLOCK: if preview exists but not saved yet
-        if (previewData && !isSaved) {
-            setPrintBlockedModal(true);
-            return;
-        }
-
         if (!previewData?.serials?.length) {
             message.error('No QR codes to print. Generate preview first.');
             return;
@@ -535,9 +482,6 @@ const CreateQRBatch = () => {
         }
     };
 
-    // ─────────────────────────────────────────────
-    // STYLES
-    // ─────────────────────────────────────────────
     const card = {
         background: '#fff',
         border: '1px solid #e8e8e8',
@@ -558,10 +502,6 @@ const CreateQRBatch = () => {
         display: 'block', fontSize: 11, fontWeight: 700, color: '#999',
         textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6
     };
-
-    // Determine print button state
-    const canPrint = isSaved && previewData;
-    const printButtonDisabled = !canPrint;
 
     return (
         <>
@@ -615,36 +555,10 @@ const CreateQRBatch = () => {
                 .btn-prev:hover { border-color: #888 !important; color: #111 !important; }
                 .btn-save { height: 40px !important; background: #111 !important; border-color: #111 !important; color: #fff !important; }
                 .btn-save:hover { background: #333 !important; border-color: #333 !important; }
-
-                /* Print button: disabled state vs enabled state */
-                .btn-prnt {
-                    height: 33px !important;
-                    border-color: #d0d0d0 !important;
-                    color: #555 !important;
-                    background: #fff !important;
-                    transition: all .12s !important;
-                }
-                .btn-prnt:hover:not(:disabled) { border-color: #111 !important; color: #111 !important; }
-                .btn-prnt-active {
-                    height: 33px !important;
-                    border-color: #111 !important;
-                    color: #111 !important;
-                    background: #fff !important;
-                }
-                .btn-prnt-active:hover { background: #111 !important; color: #fff !important; }
-
-                /* Disabled print button */
-                .btn-prnt-locked {
-                    height: 33px !important;
-                    border-color: #e0e0e0 !important;
-                    color: #ccc !important;
-                    background: #fafafa !important;
-                    cursor: not-allowed !important;
-                    pointer-events: all !important;
-                }
+                .btn-prnt { height: 33px !important; border-color: #d0d0d0 !important; color: #555 !important; background: #fff !important; }
+                .btn-prnt:hover { border-color: #111 !important; color: #111 !important; }
 
                 .sbar { display: flex; align-items: center; gap: 10px; background: #f6fef9; border: 1px solid #b7ebc8; border-radius: 8px; padding: 11px 16px; margin-bottom: 18px; }
-                .sbar-saved { display: flex; align-items: center; gap: 10px; background: #f0f8ff; border: 1px solid #90caf9; border-radius: 8px; padding: 11px 16px; margin-bottom: 18px; }
 
                 .hint { background: #f8f8f8; border: 1px solid #ebebeb; border-radius: 7px; padding: 10px 14px; font-size: 12px; color: #888; line-height: 1.6; }
                 .hint strong { color: #555; }
@@ -712,196 +626,7 @@ const CreateQRBatch = () => {
                     align-items: center;
                     gap: 3px;
                 }
-
-                /* UNSAVED BANNER */
-                .unsaved-banner {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    background: #fff8e1;
-                    border: 1px solid #ffe082;
-                    border-radius: 8px;
-                    padding: 10px 14px;
-                    margin-bottom: 12px;
-                    font-size: 12px;
-                    color: #7a5600;
-                }
-                .unsaved-banner strong { color: #5d4000; }
-
-                /* SAVED BADGE in preview header */
-                .saved-badge {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                    background: #e8f5e9;
-                    border: 1px solid #a5d6a7;
-                    border-radius: 5px;
-                    padding: 3px 10px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: #2e7d32;
-                }
-
-                /* Custom Modal styles */
-                .warn-modal-icon {
-                    width: 52px; height: 52px;
-                    border-radius: 50%;
-                    display: flex; align-items: center; justify-content: center;
-                    margin: 0 auto 16px;
-                }
-                .warn-modal-title {
-                    font-size: 16px;
-                    font-weight: 700;
-                    color: #111;
-                    text-align: center;
-                    margin-bottom: 8px;
-                    font-family: 'Sofia Sans', sans-serif;
-                }
-                .warn-modal-body {
-                    font-size: 13px;
-                    color: #666;
-                    text-align: center;
-                    line-height: 1.6;
-                    font-family: 'Sofia Sans', sans-serif;
-                }
-                .warn-modal-list {
-                    background: #f9f9f9;
-                    border: 1px solid #ececec;
-                    border-radius: 8px;
-                    padding: 12px 16px;
-                    margin: 14px 0;
-                    text-align: left;
-                }
-                .warn-modal-list-item {
-                    display: flex;
-                    align-items: flex-start;
-                    gap: 8px;
-                    font-size: 12px;
-                    color: #555;
-                    line-height: 1.5;
-                    margin-bottom: 6px;
-                    font-family: 'Sofia Sans', sans-serif;
-                }
-                .warn-modal-list-item:last-child { margin-bottom: 0; }
             `}</style>
-
-            {/* ── LEAVE WARNING MODAL ── */}
-            <Modal
-                open={leaveWarningModal}
-                footer={null}
-                closable={false}
-                width={420}
-                centered
-                zIndex={9999}
-                styles={{ body: { padding: '28px 24px 20px' } }}
-            >
-                <div className="warn-modal-icon" style={{ background: '#fff3e0' }}>
-                    <AlertTriangle size={26} strokeWidth={2} color="#e65100" />
-                </div>
-                <div className="warn-modal-title">Unsaved QR Batch</div>
-                <div className="warn-modal-body">
-                    You have generated QR codes that have <strong>not been saved</strong> yet. If you leave now, all this data will be permanently lost.
-                </div>
-                <div className="warn-modal-list">
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#e65100" style={{ flexShrink: 0, marginTop: 2 }} />
-                        Generated serial numbers will be discarded
-                    </div>
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#e65100" style={{ flexShrink: 0, marginTop: 2 }} />
-                        QR codes will not be saved to the database
-                    </div>
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#e65100" style={{ flexShrink: 0, marginTop: 2 }} />
-                        Warranty & validity data will be lost
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                    <Button
-                        style={{
-                            flex: 1, height: 38,
-                            borderColor: '#d0d0d0', color: '#555',
-                            fontFamily: 'Sofia Sans, sans-serif', fontWeight: 600,
-                            borderRadius: 7, fontSize: 13
-                        }}
-                        onClick={() => setLeaveWarningModal(false)}
-                    >
-                        Stay & Save
-                    </Button>
-                    <Button
-                        danger
-                        style={{
-                            flex: 1, height: 38,
-                            fontFamily: 'Sofia Sans, sans-serif', fontWeight: 600,
-                            borderRadius: 7, fontSize: 13
-                        }}
-                        onClick={handleConfirmLeave}
-                    >
-                        Leave Anyway
-                    </Button>
-                </div>
-            </Modal>
-
-            {/* ── PRINT BLOCKED MODAL ── */}
-            <Modal
-                open={printBlockedModal}
-                footer={null}
-                closable={false}
-                width={400}
-                centered
-                zIndex={9999}
-                styles={{ body: { padding: '28px 24px 20px' } }}
-            >
-                <div className="warn-modal-icon" style={{ background: '#fce4ec' }}>
-                    <Lock size={24} strokeWidth={2} color="#c62828" />
-                </div>
-                <div className="warn-modal-title">Save Before Printing</div>
-                <div className="warn-modal-body">
-                    Printing is only allowed after the batch is confirmed and saved. This ensures QR codes are verified and linked to your database.
-                </div>
-                <div className="warn-modal-list">
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#c62828" style={{ flexShrink: 0, marginTop: 2 }} />
-                        Unsaved QR codes would scan as <strong>unverified</strong>
-                    </div>
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#c62828" style={{ flexShrink: 0, marginTop: 2 }} />
-                        Product data won't be linked until saved
-                    </div>
-                    <div className="warn-modal-list-item">
-                        <AlertCircle size={13} strokeWidth={2} color="#c62828" style={{ flexShrink: 0, marginTop: 2 }} />
-                        Warranty info won't be accessible on scan
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                    <Button
-                        style={{
-                            flex: 1, height: 38,
-                            borderColor: '#d0d0d0', color: '#555',
-                            fontFamily: 'Sofia Sans, sans-serif', fontWeight: 600,
-                            borderRadius: 7, fontSize: 13
-                        }}
-                        onClick={() => setPrintBlockedModal(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        style={{
-                            flex: 1, height: 38,
-                            background: '#111', borderColor: '#111', color: '#fff',
-                            fontFamily: 'Sofia Sans, sans-serif', fontWeight: 600,
-                            borderRadius: 7, fontSize: 13
-                        }}
-                        onClick={() => {
-                            setPrintBlockedModal(false);
-                            handleConfirmSave();
-                        }}
-                        loading={actionLoading}
-                    >
-                        Confirm & Save Now
-                    </Button>
-                </div>
-            </Modal>
 
             <PrintSetupModal visible={showPrintSetup} onClose={() => setShowPrintSetup(false)} />
 
@@ -912,7 +637,7 @@ const CreateQRBatch = () => {
                     <div style={{ maxWidth: 1100, margin: '0 auto', height: 56, display: 'flex', alignItems: 'center', gap: 14 }}>
                         <button
                             className="back-btn"
-                            onClick={handleGoBack}
+                            onClick={() => navigate('/qr-batch')}
                             style={{ width: 32, height: 32, border: '1px solid #e0e0e0', borderRadius: 7, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                         >
                             <ArrowLeft size={15} strokeWidth={2} color="#555" />
@@ -922,25 +647,7 @@ const CreateQRBatch = () => {
                             <div style={{ fontSize: 15, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>Generate QR Codes</div>
                             <div style={{ fontSize: 12, color: '#aaa', marginTop: 1 }}>Create new QR code batch for products</div>
                         </div>
-                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {/* Unsaved indicator in header */}
-                            {previewGenerated && !isSaved && (
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: 5,
-                                    background: '#fff8e1', border: '1px solid #ffe082',
-                                    borderRadius: 6, padding: '4px 10px',
-                                    fontSize: 11, fontWeight: 700, color: '#7a5600'
-                                }}>
-                                    <AlertTriangle size={11} strokeWidth={2.5} />
-                                    Unsaved
-                                </div>
-                            )}
-                            {isSaved && (
-                                <div className="saved-badge">
-                                    <ShieldCheck size={12} strokeWidth={2} />
-                                    Saved
-                                </div>
-                            )}
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                             <Tooltip title="Configure global print layout & labels" placement="left">
                                 <button
                                     onClick={() => setShowPrintSetup(true)}
@@ -959,25 +666,10 @@ const CreateQRBatch = () => {
                                     Print Setup
                                 </button>
                             </Tooltip>
-
-                            {/* Print button in header — only enabled after save */}
                             {previewData && (
-                                <Tooltip
-                                    title={!isSaved ? 'Please Confirm & Save the batch before printing' : 'Print batch QR codes'}
-                                    placement="left"
-                                >
-                                    <Button
-                                        className={canPrint ? 'btn-prnt-active' : 'btn-prnt-locked'}
-                                        icon={canPrint
-                                            ? <Printer size={14} strokeWidth={1.8} />
-                                            : <Lock size={13} strokeWidth={1.8} />
-                                        }
-                                        onClick={handlePrint}
-                                        style={{ height: 34 }}
-                                    >
-                                        {canPrint ? 'Print Batch' : 'Print Locked'}
-                                    </Button>
-                                </Tooltip>
+                                <Button className="btn-prnt" icon={<Printer size={14} strokeWidth={1.8} />} onClick={handlePrint} style={{ height: 34 }}>
+                                    Print Batch
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -1007,6 +699,7 @@ const CreateQRBatch = () => {
                                 </div>
                                 <div>
                                     <label style={fieldLabel}>Quantity <span style={{ color: '#e53535' }}>*</span></label>
+                                    {/* FIX: precision=0 + parser ensures only integers */}
                                     <InputNumber
                                         size="medium"
                                         min={1}
@@ -1082,6 +775,7 @@ const CreateQRBatch = () => {
                                             />
                                         </div>
 
+                                        {/* ── FIX: Validity Date with Days Offset Dropdown ── */}
                                         <div>
                                             <label style={fieldLabel}>Validity Date (Days from Purchase)</label>
                                             <div style={{ display: 'flex', gap: 6 }}>
@@ -1117,7 +811,7 @@ const CreateQRBatch = () => {
                                             </div>
                                             {bulkWarranty.validityDate && (
                                                 <div className="validity-preview">
-                                                    ✓ {dayjs(bulkWarranty.validityDate).format('DD MMM YYYY')}
+                                                     {dayjs(bulkWarranty.validityDate).format('DD MMM YYYY')}
                                                 </div>
                                             )}
                                         </div>
@@ -1195,6 +889,7 @@ const CreateQRBatch = () => {
                                                         />
                                                     </td>
 
+                                                    {/* ── FIX: Per-row Validity Days Dropdown ── */}
                                                     <td>
                                                         <div style={{ display: 'flex', gap: 5, minWidth: 210 }}>
                                                             <Select
@@ -1229,7 +924,7 @@ const CreateQRBatch = () => {
                                                         </div>
                                                         {item.validityDate && (
                                                             <div className="validity-preview" style={{ marginTop: 3 }}>
-                                                                ✓ {dayjs(item.validityDate).format('DD MMM YYYY')}
+                                                                 {dayjs(item.validityDate).format('DD MMM YYYY')}
                                                             </div>
                                                         )}
                                                     </td>
@@ -1253,39 +948,12 @@ const CreateQRBatch = () => {
                     {/* Action Buttons */}
                     {serialItems.length > 0 && (
                         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                            <Button
-                                className="btn-prev"
-                                icon={<Eye size={14} strokeWidth={1.8} />}
-                                onClick={handleGeneratePreview}
-                                loading={previewLoading}
-                                disabled={isSaved}
-                                style={{ flex: 1 }}
-                            >
+                            <Button className="btn-prev" icon={<Eye size={14} strokeWidth={1.8} />} onClick={handleGeneratePreview} loading={previewLoading} style={{ flex: 1 }}>
                                 {previewLoading ? 'Generating...' : 'Generate Preview'}
                             </Button>
-                            {previewData && !isSaved && (
-                                <Button
-                                    className="btn-save"
-                                    icon={<Save size={14} strokeWidth={1.8} />}
-                                    onClick={handleConfirmSave}
-                                    loading={actionLoading}
-                                    style={{ flex: 1 }}
-                                >
+                            {previewData && (
+                                <Button className="btn-save" icon={<Save size={14} strokeWidth={1.8} />} onClick={handleConfirmSave} loading={actionLoading} style={{ flex: 1 }}>
                                     {actionLoading ? 'Saving...' : 'Confirm & Save'}
-                                </Button>
-                            )}
-                            {isSaved && (
-                                <Button
-                                    style={{
-                                        flex: 1, height: 40,
-                                        background: '#e8f5e9', borderColor: '#a5d6a7',
-                                        color: '#2e7d32', fontWeight: 700, fontSize: 13,
-                                        borderRadius: 7, display: 'flex', alignItems: 'center',
-                                        justifyContent: 'center', gap: 7, cursor: 'default'
-                                    }}
-                                    icon={<ShieldCheck size={14} strokeWidth={2} />}
-                                >
-                                    Batch Saved Successfully
                                 </Button>
                             )}
                         </div>
@@ -1298,91 +966,32 @@ const CreateQRBatch = () => {
                                 <div style={sectionHead}>
                                     <div style={sectionIcon}><QrCodeIcon size={14} strokeWidth={1.8} color="#666" /></div>
                                     <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>QR Preview</span>
-                                    {isSaved && (
-                                        <span className="saved-badge" style={{ marginLeft: 8 }}>
-                                            <ShieldCheck size={11} strokeWidth={2} />
-                                            Saved to Database
-                                        </span>
-                                    )}
-                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        {/* Unsaved warning before print button */}
-                                        {!isSaved && (
-                                            <span style={{ fontSize: 11, color: '#e65100', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <Lock size={11} strokeWidth={2.5} />
-                                                Save first to unlock print
-                                            </span>
-                                        )}
-                                        <Tooltip
-                                            title={!isSaved ? 'Confirm & Save the batch first before printing' : 'Print all QR codes'}
-                                            placement="left"
-                                        >
-                                            <Button
-                                                className={canPrint ? 'btn-prnt' : 'btn-prnt-locked'}
-                                                size="small"
-                                                icon={canPrint
-                                                    ? <Printer size={13} strokeWidth={1.8} />
-                                                    : <Lock size={12} strokeWidth={1.8} />
-                                                }
-                                                onClick={handlePrint}
-                                                style={{ height: 30 }}
-                                            >
-                                                {canPrint ? 'Print All' : 'Locked'}
-                                            </Button>
-                                        </Tooltip>
+                                    <div style={{ marginLeft: 'auto' }}>
+                                        <Button className="btn-prnt" size="small" icon={<Printer size={13} strokeWidth={1.8} />} onClick={handlePrint} style={{ height: 30 }}>
+                                            Print All
+                                        </Button>
                                     </div>
                                 </div>
 
-                                {/* Status bar: different look for saved vs unsaved */}
-                                {isSaved ? (
-                                    <div className="sbar-saved">
-                                        <ShieldCheck size={16} strokeWidth={1.8} color="#1565c0" />
-                                        <div>
-                                            <div style={{ fontSize: 12, fontWeight: 700, color: '#0d47a1' }}>Batch Confirmed & Saved</div>
-                                            <div style={{ fontSize: 11, color: '#1976d2' }}>QR codes are verified — ready to print</div>
-                                        </div>
-                                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
-                                            {[
-                                                { label: 'Product', value: previewData.productName },
-                                                { label: 'Serials', value: previewData.totalSerials },
-                                                { label: 'Total QR', value: previewData.totalQRCodes },
-                                            ].map(s => (
-                                                <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{s.label}</span>
-                                                    <span style={{ fontSize: s.label === 'Product' ? 13 : 15, fontWeight: 700, color: '#111' }}>{s.value}</span>
-                                                </div>
-                                            ))}
-                                        </div>
+                                <div className="sbar">
+                                    <CheckCircle2 size={16} strokeWidth={1.8} color="#25a855" />
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1a7a3c' }}>Preview Generated</div>
+                                        <div style={{ fontSize: 11, color: '#3a9e60' }}>{previewData.totalQRCodes} QR codes ready to save</div>
                                     </div>
-                                ) : (
-                                    <>
-                                        <div className="sbar">
-                                            <CheckCircle2 size={16} strokeWidth={1.8} color="#25a855" />
-                                            <div>
-                                                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a7a3c' }}>Preview Generated</div>
-                                                <div style={{ fontSize: 11, color: '#3a9e60' }}>{previewData.totalQRCodes} QR codes ready — save before printing</div>
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
+                                        {[
+                                            { label: 'Product', value: previewData.productName },
+                                            { label: 'Serials', value: previewData.totalSerials },
+                                            { label: 'Total QR', value: previewData.totalQRCodes },
+                                        ].map(s => (
+                                            <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{s.label}</span>
+                                                <span style={{ fontSize: s.label === 'Product' ? 13 : 15, fontWeight: 700, color: '#111' }}>{s.value}</span>
                                             </div>
-                                            <div style={{ marginLeft: 'auto', display: 'flex', gap: 28 }}>
-                                                {[
-                                                    { label: 'Product', value: previewData.productName },
-                                                    { label: 'Serials', value: previewData.totalSerials },
-                                                    { label: 'Total QR', value: previewData.totalQRCodes },
-                                                ].map(s => (
-                                                    <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{s.label}</span>
-                                                        <span style={{ fontSize: s.label === 'Product' ? 13 : 15, fontWeight: 700, color: '#111' }}>{s.value}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {/* Unsaved action banner */}
-                                        <div className="unsaved-banner">
-                                            <AlertTriangle size={15} strokeWidth={2} color="#e65100" style={{ flexShrink: 0 }} />
-                                            <span>
-                                                <strong>Action Required:</strong> Click <strong>"Confirm & Save"</strong> above to save this batch. Print will be unlocked automatically after saving.
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
+                                        ))}
+                                    </div>
+                                </div>
 
                                 {previewData.serials && (
                                     <div className="prev-grid">
@@ -1414,7 +1023,7 @@ const CreateQRBatch = () => {
                                 )}
 
                                 <div className="hint" style={{ marginTop: 16 }}>
-                                    <strong>2 QR codes per serial</strong> — Product (black stripe) and Box (gray stripe). Hover to download individually, or use Print All{!isSaved ? ' (available after saving)' : ''}.
+                                    <strong>2 QR codes per serial</strong> — Product (black stripe) and Box (gray stripe). Hover to download individually, or use Print All.
                                 </div>
                             </div>
                         </div>

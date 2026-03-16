@@ -25,7 +25,7 @@ const QRBatchReducer = (state = initialState, action) => {
         ...state,
         actionLoading: false,
         batches: [action.payload, ...state.batches],
-        previewData: null,
+        // previewData: null,
         error: null
       };
     case 'CONFIRM_BATCH_FAILURE':

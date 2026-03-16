@@ -567,7 +567,7 @@ const SerialScan = () => {
               </div>
 
               {/* QR Codes */}
-              {serialDetails.qrCodes?.length > 0 && (
+              {/* {serialDetails.qrCodes?.length > 0 && (
                 <div className="ss-card au5">
                   <div className="card-head">
                     <div className="card-head-icon"><QrCode size={14} strokeWidth={1.8} style={{ color: '#666' }} /></div>
@@ -587,7 +587,7 @@ const SerialScan = () => {
                     ))}
                   </div>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
 
