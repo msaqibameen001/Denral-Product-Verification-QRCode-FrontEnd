@@ -7,6 +7,7 @@ import {
   FileText, Loader2, CheckCircle, XCircle, Download, QrCode
 } from 'lucide-react';
 import dayjs from 'dayjs';
+import logoMain from '../../../assets/images/users/SASS-LOGO-removebg.png';
 
 /* ── canvas-confetti loaded from CDN via script tag ── */
 const loadConfetti = () => new Promise((resolve) => {
@@ -406,6 +407,18 @@ const SerialScan = () => {
 
         {/* ── Hero ── */}
         <div className="hero">
+          <div className="au0" style={{ marginBottom: 5 }}>
+            <img
+              src={logoMain}
+              alt="SASS Logo"
+              style={{
+                height: 80,
+                width: 'auto',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.08))'
+              }}
+            />
+          </div>
           {/* Animated check */}
           <div className="check-outer">
             <div className="check-ring" />
@@ -594,7 +607,7 @@ const SerialScan = () => {
           {/* Footer */}
           <div className="ss-footer">
             <div className="footer-line" />
-            <div className="footer-txt">QR Batch System &nbsp;·&nbsp; {dayjs().format('YYYY')}</div>
+            <div className="footer-txt">Verified by Denral Electric &nbsp;·&nbsp; {dayjs().format('YYYY')}</div>
           </div>
         </div>
       </div>

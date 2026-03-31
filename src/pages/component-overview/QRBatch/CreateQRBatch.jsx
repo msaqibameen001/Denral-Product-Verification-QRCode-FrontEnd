@@ -336,7 +336,8 @@ const CreateQRBatch = () => {
         try {
             const link = document.createElement('a');
             link.href = `data:image/png;base64,${qrCode.qrImageBase64}`;
-            link.download = `${serialNo}_${type}.png`;
+            const label = type === 'product' ? 'warranty-card' : type;
+            link.download = `${serialNo}_${label}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -1398,7 +1399,7 @@ const CreateQRBatch = () => {
                                                         <div className="pqc-foot">
                                                             <span className={`pqc-tag ${qr.qrType}`}>
                                                                 {qr.qrType === 'product'
-                                                                    ? <><Package size={10} strokeWidth={2} /> Product</>
+                                                                    ? <><Package size={10} strokeWidth={2} /> Warranty Card</>
                                                                     : <><Box size={10} strokeWidth={2} /> Box</>
                                                                 }
                                                             </span>

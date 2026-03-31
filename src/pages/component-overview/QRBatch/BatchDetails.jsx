@@ -39,7 +39,8 @@ const BatchDetails = () => {
         try {
             const link = document.createElement('a');
             link.href = `data:image/png;base64,${qrCode.qrImageBase64}`;
-            link.download = `${serialNo}_${type}.png`;
+            const label = type === 'product' ? 'warranty-card' : type;
+            link.download = `${serialNo}_${label}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -92,7 +93,7 @@ const BatchDetails = () => {
             if (productQR) qrItems.push(`
                 <div class="qr-item">
                     <div class="qr-left">
-                        <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Product QR"/>
+                        <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Warranty Card QR"/>
                     </div>
                     <div class="qr-right">${detailsHtml}</div>
                 </div>`);
@@ -626,7 +627,7 @@ const BatchDetails = () => {
                                                 <div className="qr-card-footer">
                                                     <span className={`qr-type-tag ${qr.qrType}`}>
                                                         {qr.qrType === 'product'
-                                                            ? <><Package size={11} strokeWidth={2} /> Product</>
+                                                            ? <><Package size={11} strokeWidth={2} /> Warranty Card</>
                                                             : <><Box size={11} strokeWidth={2} /> Box</>
                                                         }
                                                     </span>
