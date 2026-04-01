@@ -291,6 +291,11 @@ const CreateQRBatch = () => {
     const handleGeneratePreview = async () => {
         if (!selectedProduct) { message.error('Please select a product'); return; }
         if (serialItems.length === 0) { message.error('Please add at least one serial item'); return; }
+        const missingValidity = serialItems.findIndex(item => !item.validityDate);
+        if (missingValidity !== -1) {
+            message.error(`Serial #${missingValidity + 1} (${serialItems[missingValidity].serialNo}) has no validity date`);
+            return;
+        }
         try {
             await dispatch(Generate_QR_Preview({
                 productId: parseInt(selectedProduct),
@@ -313,6 +318,18 @@ const CreateQRBatch = () => {
 
     const handleConfirmSave = async () => {
         if (!previewData) { message.error('Please generate preview first'); return; }
+        const invalidItems = serialItems
+            .map((item, i) => ({ item, i }))
+            .filter(({ item }) => !item.validityDate || !item.purchaseDate);
+
+        if (invalidItems.length > 0) {
+            const first = invalidItems[0];
+            message.error({
+                content: `Serial #${first.i + 1} (${first.item.serialNo}): Purchase date aur Validity date are required.`,
+                duration: 4,
+            });
+            return;
+        }
         try {
             await dispatch(Confirm_And_Save_Batch({
                 productId: parseInt(selectedProduct),
