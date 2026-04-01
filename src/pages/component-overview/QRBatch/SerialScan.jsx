@@ -560,8 +560,8 @@ const SerialScan = () => {
                             />
                           </div>
                           <div className="w-bar-labels">
-                            <span>{dayjs(serialDetails.purchaseDate).format('MMM YY')}</span>
-                            <span>{dayjs(serialDetails.validityDate).format('MMM YY')}</span>
+                            <span>{dayjs(serialDetails.purchaseDate).format('DD MMM YY')}</span>
+                            <span>{dayjs(serialDetails.validityDate).format('DD MMM YY')}</span>
                           </div>
                         </>
                       )}

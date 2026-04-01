@@ -17,6 +17,7 @@ const QRBatchList = Loadable(lazy(() => import('../pages/component-overview/QRBa
 const CreateQRBatch = Loadable(lazy(() => import('../pages/component-overview/QRBatch/CreateQRBatch')));
 const BatchDetails = Loadable(lazy(() => import('../pages/component-overview/QRBatch/BatchDetails')));
 const SerialScan = Loadable(lazy(() => import('../pages/component-overview/QRBatch/SerialScan')));
+const ProductVerification = Loadable(lazy(() => import('../pages/component-overview/ProductVerification/ProductVerification')));
 
 const userData = getUserData();
 
@@ -50,6 +51,10 @@ const MainRoutes = {
     {
       path: 'qr-batch',
       element: isLoggedIn() ? <QRBatchList /> : <Navigate to="/login" />
+    },
+    {
+      path: 'prod-verify',
+      element: isLoggedIn() ? <ProductVerification /> : <Navigate to="/login" />
     },
     {
       path: 'qr-batch-create',

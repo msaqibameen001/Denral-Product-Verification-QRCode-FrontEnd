@@ -2,7 +2,8 @@ import {
   QrCode,
   PlusSquare,
   Layers,
-  Package
+  Package,
+  ScanQrCode
 } from 'lucide-react';
 
 const icons = {
@@ -10,6 +11,7 @@ const icons = {
   Package,
   PlusSquare,
   Layers,
+  ScanQrCode,
 };
 
 import { getUserData } from '../utils/authUtils';
@@ -55,6 +57,14 @@ const commonItems = [
     type: 'item',
     url: '/products',
     icon: icons.Package,
+    breadcrumbs: false
+  },
+  {
+    id: 'product-verification',
+    title: 'Product Verification',
+    type: 'item',
+    url: '/prod-verify',
+    icon: icons.ScanQrCode,
     breadcrumbs: false
   },
 ];

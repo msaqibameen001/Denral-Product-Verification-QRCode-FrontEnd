@@ -46,7 +46,7 @@ const QRBatchReducer = (state = initialState, action) => {
       return { ...state, actionLoading: false, error: action.payload };
 
     case 'GET_SERIAL_DETAILS_REQUEST':
-      return { ...state, actionLoading: true, error: null };
+      return { ...state, actionLoading: true, serialDetails: null, error: null };
     case 'GET_SERIAL_DETAILS_SUCCESS':
       return { ...state, actionLoading: false, serialDetails: action.payload, error: null };
     case 'GET_SERIAL_DETAILS_FAILURE':

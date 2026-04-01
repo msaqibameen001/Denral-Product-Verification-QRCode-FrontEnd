@@ -18,6 +18,7 @@ export default function DashboardLayout() {
   const location = useLocation();
 
   const isPurchaseRoute = location.pathname === '/purchase';
+  const isProdVerifyRoute = location.pathname === '/prod-verify';
   const isScanRoute = /^\/scan\//.test(location.pathname);
 
   useEffect(() => {
@@ -64,14 +65,14 @@ export default function DashboardLayout() {
         sx={{
           width: 'calc(100% - 260px)',
           flexGrow: 1,
-          pt: { xs: 2, sm: 2 },
+          pt: isProdVerifyRoute ? 0 : { xs: 2, sm: 2 },
           backgroundColor: isPurchaseRoute ? '#F5F5F5' : 'transparent'
         }}
       >
         <Toolbar sx={{ mt: 'inherit' }} />
         <Box
           sx={{
-            ...{ px: { xs: 0, sm: 2 } },
+            ...{ px: isProdVerifyRoute ? 0 : { xs: 0, sm: 2 }, },
             position: 'relative',
             minHeight: 'calc(100vh - 110px)',
             display: 'flex',

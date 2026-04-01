@@ -98,7 +98,7 @@ export const Get_Serial_Details = (serialNo) => async (dispatch) => {
   } catch (error) {
     const errorMessage = error.response?.data?.error || 'Serial number not found';
     dispatch({ type: 'GET_SERIAL_DETAILS_FAILURE', payload: errorMessage });
-    toast.error(errorMessage);
+    // toast.error(errorMessage);
     return null;
   }
 };

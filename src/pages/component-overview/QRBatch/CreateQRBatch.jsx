@@ -381,7 +381,8 @@ const CreateQRBatch = () => {
             <div class="qr-item">
                 <div class="qr-left">
                     <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Product QR"/>
-                </div>
+                    <div class="qr-label">Scan for Warranty</div>
+                    </div>
                 <div class="qr-right">${detailsHtml}</div>
             </div>
         `);
@@ -391,7 +392,8 @@ const CreateQRBatch = () => {
             <div class="qr-item">
                 <div class="qr-left">
                     <img src="data:image/png;base64,${boxQR.qrImageBase64}" alt="Box QR"/>
-                </div>
+                    <div class="qr-label">Scan for Warranty</div>
+                    </div>
                 <div class="qr-right">${detailsHtml}</div>
             </div>
         `);
@@ -470,6 +472,15 @@ const CreateQRBatch = () => {
     flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
   }
   .qr-left img { width: 100%; height: auto; display: block; }
+   .qr-label {
+    font-size: 8px;
+    font-weight: 700;
+    color: #555;
+    text-align: center;
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
   .qr-right { flex: 1; min-width: 0; margin-top: 10px; display: flex; flex-direction: column; justify-content: center; }
   .d-serial {
     font-family: 'Courier New', monospace;
