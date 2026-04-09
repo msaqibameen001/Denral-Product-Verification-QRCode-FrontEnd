@@ -62,10 +62,6 @@ const BatchDetails = () => {
         message.success('Downloading all QR codes...');
     };
 
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // OPTIMIZED PRINT HANDLER FOR SATO CG412DT THERMAL PRINTER
-    // Label: 100mm × 25mm | 2 QR codes per row
-    // ═══════════════════════════════════════════════════════════════════════════════
     const handlePrint = () => {
         if (!selectedBatch?.serials?.length) return;
 
@@ -73,6 +69,7 @@ const BatchDetails = () => {
         const batchDate = dayjs(selectedBatch.generatedAt).format('DD MMM YYYY');
 
         const cfg = printSettings || {
+            columns: 4,
             showSerialNo: true,
             showProduct: true,
             showWarranty: true,
@@ -80,384 +77,248 @@ const BatchDetails = () => {
             showValidity: true
         };
 
-        // ─────────────────────────────────────────────────────────────────────────
-        // COLLECT ALL QR CODES WITH METADATA
-        // ─────────────────────────────────────────────────────────────────────────
         let qrItems = [];
-
         selectedBatch.serials.forEach((serial) => {
             const productQR = serial.qrCodes?.find(q => q.qrType === 'product');
             const boxQR = serial.qrCodes?.find(q => q.qrType === 'box');
 
-            // Build text content based on settings
-            const textLines = [];
+            const detailsHtml = `
+                ${cfg.showSerialNo ? `<div class="d-serial">${serial.serialNo}</div>` : ''}
+                ${cfg.showProduct ? `<div class="d-product">${productName}</div>` : ''}
+                ${cfg.showWarranty && serial.warrantyDesc ? `<div class="d-row"><span class="dk">WARRANTY: </span><span class="dv">${serial.warrantyDesc}${serial.warrantyTerm ? ' ' + serial.warrantyTerm : ''}</span></div>` : ''}
+                ${cfg.showPurchase && serial.purchaseDate ? `<div class="d-row"><span class="dk">PURCHASE: </span><span class="dv">${dayjs(serial.purchaseDate).format('DD MMM YYYY')}</span></div>` : ''}
+                ${cfg.showValidity && serial.validityDate ? `<div class="d-row"><span class="dk">VALID: </span><span class="dv">${dayjs(serial.validityDate).format('DD MMM YYYY')}</span></div>` : ''}
+            `;
 
-            if (cfg.showSerialNo) {
-                textLines.push({ type: 'serial', value: serial.serialNo });
-            }
-
-            if (cfg.showProduct) {
-                textLines.push({ type: 'product', value: productName });
-            }
-
-            if (cfg.showWarranty && serial.warrantyDesc) {
-                const warrantyText = `${serial.warrantyDesc}${serial.warrantyTerm ? ' ' + serial.warrantyTerm : ''}`;
-                textLines.push({ type: 'warranty', label: 'WARRANTY', value: warrantyText });
-            }
-
-            if (cfg.showPurchase && serial.purchaseDate) {
-                textLines.push({
-                    type: 'purchase',
-                    label: 'PURCHASE',
-                    value: dayjs(serial.purchaseDate).format('DD MMM YYYY')
-                });
-            }
-
-            if (cfg.showValidity && serial.validityDate) {
-                textLines.push({
-                    type: 'validity',
-                    label: 'VALID',
-                    value: dayjs(serial.validityDate).format('DD MMM YYYY')
-                });
-            }
-
-            // Add Product QR (Warranty Card)
-            if (productQR) {
-                qrItems.push({
-                    base64: productQR.qrImageBase64,
-                    type: 'product',
-                    label: 'SCAN FOR WARRANTY',
-                    textLines: textLines
-                });
-            }
-
-            // Add Box QR
-            if (boxQR) {
-                qrItems.push({
-                    base64: boxQR.qrImageBase64,
-                    type: 'box',
-                    label: 'SCAN FOR WARRANTY',
-                    textLines: textLines
-                });
-            }
+            if (productQR) qrItems.push(`
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${productQR.qrImageBase64}" alt="Warranty Card QR"/>
+                        <div class="qr-label">Scan for Warranty</div>
+                        </div>
+                    <div class="qr-right">${detailsHtml}</div>
+                </div>`);
+            if (boxQR) qrItems.push(`
+                <div class="qr-item">
+                    <div class="qr-left">
+                        <img src="data:image/png;base64,${boxQR.qrImageBase64}" alt="Box QR"/>
+                        <div class="qr-label">Scan for Warranty</div>
+                        </div>
+                    <div class="qr-right">${detailsHtml}</div>
+                </div>`);
         });
 
-        // ─────────────────────────────────────────────────────────────────────────
-        // BUILD HTML FOR LABELS (2 per row)
-        // ─────────────────────────────────────────────────────────────────────────
-        let labelsHtml = '';
-
-        for (let i = 0; i < qrItems.length; i += 2) {
-            const leftQR = qrItems[i];
-            const rightQR = qrItems[i + 1] || null;
-
-            labelsHtml += `
-            <div class="label-row">
-                ${generateSingleLabel(leftQR)}
-                ${rightQR ? generateSingleLabel(rightQR) : '<div class="label-cell"></div>'}
-            </div>`;
+        let rowsHtml = '';
+        for (let i = 0; i < qrItems.length; i += cfg.columns) {
+            rowsHtml += `<div class="qr-row">${qrItems.slice(i, i + cfg.columns).join('')}</div>`;
         }
 
-        // ─────────────────────────────────────────────────────────────────────────
-        // GENERATE SINGLE LABEL CELL
-        // ─────────────────────────────────────────────────────────────────────────
-        function generateSingleLabel(qr) {
-            if (!qr) return '<div class="label-cell"></div>';
+        const totalQR = selectedBatch.totalQRCodes || qrItems.length;
 
-            let textHtml = '';
-            qr.textLines.forEach(line => {
-                if (line.type === 'serial') {
-                    textHtml += `<div class="text-serial">${line.value}</div>`;
-                } else if (line.type === 'product') {
-                    textHtml += `<div class="text-product">${line.value}</div>`;
-                } else {
-                    textHtml += `<div class="text-field"><span class="text-label">${line.label}:</span> <span class="text-value">${line.value}</span></div>`;
-                }
-            });
-
-            return `
-            <div class="label-cell">
-                <div class="qr-container">
-                    <img src="data:image/png;base64,${qr.base64}" alt="QR Code" class="qr-image">
-                    <div class="qr-label">${qr.label}</div>
-                </div>
-                <div class="text-container">
-                    ${textHtml}
-                </div>
-            </div>`;
-        }
-
-        // ─────────────────────────────────────────────────────────────────────────
-        // FINAL PRINT HTML
-        // ─────────────────────────────────────────────────────────────────────────
         const printHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>QR Labels - Batch #${selectedBatch.batchId}</title>
+<title>QR Batch #${selectedBatch.batchId} &mdash; ${productName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
-/* ═══════════════════════════════════════════════════════════════════════════
-   SATO CG412 THERMAL PRINTER OPTIMIZED
-   Label: 100mm × 25mm | 2 labels per row
-   ═══════════════════════════════════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   PAGE SETUP - EXACT LABEL SIZE
-   ───────────────────────────────────────────────────────────────────────── */
-@page {
-    size: 100mm 25mm;
-    margin: 0;
-}
-
-@media print {
-    @page {
-        size: 100mm 25mm;
-        margin: 0;
+  @media print {
+    @page { 
+      margin: 0.5in 0.4in;
+      size: A4 portrait;
     }
-    
-    body {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    .no-print {
-        display: none !important;
-    }
-}
+    body { margin: 0; background: #fff; }
+    .screen-header, .screen-footer { display: none !important; }
+    .print-content { padding: 0 !important; }
+  }
 
-body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Arial', 'Helvetica', sans-serif;
-    background: #fff;
+  body {
+    font-family: 'Sofia Sans', sans-serif;
+    background: #fff; color: #111;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-}
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   LABEL ROW - 2 LABELS SIDE BY SIDE
-   ───────────────────────────────────────────────────────────────────────── */
-.label-row {
-    width: 100mm;
-    height: 25mm;
-    display: flex;
-    page-break-after: always;
+  .screen-header {
+    display: flex; 
+    align-items: flex-end; 
+    justify-content: space-between;
+    padding: 22px 32px 16px; 
+    border-bottom: 2px solid #111; 
+    margin-bottom: 4px;
+  }
+  .screen-header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .screen-header .sub { font-size: 11px; color: #666; margin-top: 3px; }
+  .screen-header .pills { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; }
+  .pill-d { background: #111; color: #fff; }
+  .pill-l { background: #f2f2f2; color: #444; }
+  .screen-header .dt { font-size: 10px; color: #aaa; }
+  .screen-footer { 
+    padding: 12px 32px; 
+    border-top: 1px solid #e0e0e0; 
+    display: flex; 
+    justify-content: space-between; 
+    margin-top: 8px; 
+  }
+  .screen-footer span { font-size: 10px; color: #bbb; }
+  .brand { font-weight: 700; font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+  .print-btn { 
+    background: #111; 
+    color: #fff; 
+    border: none; 
+    padding: 8px 16px; 
+    border-radius: 6px; 
+    font-size: 13px; 
+    font-weight: 600; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+  }
+  .print-btn:hover { background: #333; }
+  .print-btn svg { width: 15px; height: 15px; }
+
+  @media print {
+    .screen-header, .screen-footer, .print-btn { display: none !important; }
+  }
+
+  .print-content { padding: 20px 32px; }
+  @media print {
+    .print-content { padding: 0; }
+  }
+
+  .qr-row {
+    display: grid;
+    grid-template-columns: repeat(${cfg.columns}, 1fr);
+    gap: ${cfg.columns === 1 ? '20px' : cfg.columns === 2 ? '18px' : cfg.columns === 3 ? '14px' : '12px'};
+    margin-bottom: ${cfg.columns === 1 ? '24px' : cfg.columns === 2 ? '20px' : '16px'};
     page-break-inside: avoid;
-    break-after: page;
     break-inside: avoid;
-}
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   SINGLE LABEL CELL - 50mm wide × 25mm high
-   ───────────────────────────────────────────────────────────────────────── */
-.label-cell {
-    width: 50mm;
-    height: 25mm;
+  .qr-item {
     display: flex;
-    align-items: stretch;
-    gap: 1.5mm;
-    padding: 1.5mm;
-    background: #fff;
-    position: relative;
-}
+    align-items: flex-start;
+    gap: ${cfg.columns === 1 ? '16px' : cfg.columns === 2 ? '14px' : '10px'};
+    padding: ${cfg.columns === 1 ? '14px' : cfg.columns === 2 ? '12px' : cfg.columns === 3 ? '10px' : '8px'};
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   QR CODE SECTION - Left side
-   ───────────────────────────────────────────────────────────────────────── */
-.qr-container {
-    width: 21mm;
+  .qr-left {
+    width: ${cfg.columns === 1 ? '110px' : cfg.columns === 2 ? '100px' : cfg.columns === 3 ? '85px' : '75px'};
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-}
+  }
 
-.qr-image {
-    width: 20mm;
-    height: 20mm;
+  .qr-left img {
+    width: 100%;
+    height: auto;
     display: block;
-    margin: 0 auto;
-}
-
-.qr-label {
-    font-size: 5pt;
+  }
+    .qr-label {
+    font-size: 8px;
     font-weight: 700;
+    color: #555;
     text-align: center;
-    margin-top: 0.5mm;
+    margin-top: 2px;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
-    letter-spacing: 0.1mm;
-    color: #000;
-    line-height: 1.1;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   TEXT SECTION - Right side
-   ───────────────────────────────────────────────────────────────────────── */
-.text-container {
-    flex: 1;
+  .qr-right { 
+    flex: 1; 
     min-width: 0;
     display: flex;
+    margin-top: 10px;
     flex-direction: column;
     justify-content: center;
-    gap: 0.8mm;
-}
+  }
 
-/* Serial Number */
-.text-serial {
+  .d-serial {
     font-family: 'Courier New', monospace;
-    font-size: 7pt;
+    font-size: ${cfg.columns === 1 ? '10px' : cfg.columns === 2 ? '9.5px' : cfg.columns === 3 ? '8.5px' : '8px'};
     font-weight: 700;
-    color: #000;
-    letter-spacing: 0.2mm;
-    line-height: 1.1;
-    margin-bottom: 0.5mm;
-}
-
-/* Product Name */
-.text-product {
-    font-size: 7pt;
-    font-weight: 700;
-    color: #000;
-    line-height: 1.1;
-    margin-bottom: 0.5mm;
-}
-
-/* Data Fields */
-.text-field {
-    font-size: 5.5pt;
+    color: #111;
+    letter-spacing: 0.2px;
+    margin-bottom: ${cfg.columns <= 2 ? '5px' : '3px'};
     line-height: 1.2;
-    color: #000;
-    margin-top: 0.3mm;
-}
+  }
 
-.text-label {
+  .d-product { 
+     font-size: ${cfg.columns === 1 ? '11px' : cfg.columns === 2 ? '10.5px' : cfg.columns === 3 ? '9.5px' : '9px'};
+    font-weight: 600;
+    color: #222;
+    margin-bottom: ${cfg.columns <= 2 ? '6px' : '4px'};
+    line-height: 1.2;
+  }
+
+  .d-row { 
+    display: block;
+    margin-top: -8px;
+  }
+
+  .dk { 
+    font-size: ${cfg.columns === 1 ? '8.5px' : cfg.columns === 2 ? '7px' : '7.5px'};
     font-weight: 700;
+    color: #888;
     text-transform: uppercase;
-    letter-spacing: 0.1mm;
-}
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
 
-.text-value {
-    font-weight: 400;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   SCREEN PREVIEW (not printed)
-   ───────────────────────────────────────────────────────────────────────── */
-@media screen {
-    body {
-        padding: 20px;
-        background: #f0f0f0;
-    }
-    
-    .label-row {
-        margin-bottom: 10px;
-        border: 1px dashed #999;
-    }
-    
-    .label-cell {
-        border-right: 1px dashed #ccc;
-    }
-    
-    .label-cell:last-child {
-        border-right: none;
-    }
-    
-    .print-header {
-        background: #fff;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .print-btn {
-        background: #000;
-        color: #fff;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 14px;
-    }
-    
-    .print-btn:hover {
-        background: #333;
-    }
-}
-
-@media print {
-    .print-header {
-        display: none !important;
-    }
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   WEBKIT PRINT FIXES
-   ───────────────────────────────────────────────────────────────────────── */
-@media print {
-    html, body {
-        width: 100mm;
-        height: auto;
-    }
-    
-    .label-row {
-        page-break-after: always;
-        break-after: page;
-    }
-    
-    .label-row:last-child {
-        page-break-after: auto;
-        break-after: auto;
-    }
-}
+  .dv { 
+    font-size: ${cfg.columns === 1 ? '7.5px' : cfg.columns === 2 ? '7px' : '6.5px'};
+    color: #333;
+    line-height: 1.4;
+    flex: 1;
+  }
 </style>
 </head>
 <body>
 
-<!-- Print Header (screen only) -->
-<div class="print-header no-print">
-    <div>
-        <h2 style="margin: 0; font-size: 18px;">QR Labels - Batch #${selectedBatch.batchId}</h2>
-        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">${productName} | ${qrItems.length} labels | ${batchDate}</p>
+<div class="screen-header">
+  <div>
+    <h1>QR Batch #${selectedBatch.batchId}</h1>
+    <div class="sub">${productName}</div>
+  </div>
+  <div style="display: flex; gap: 15px;">
+    <div style="text-align: right;">
+      <div class="pills">
+        <span class="pill pill-d">${selectedBatch.totalSerials} Serials</span>
+        <span class="pill pill-l">${totalQR} QR Codes</span>
+      </div>
+      <div class="dt">Generated: ${batchDate}</div>
     </div>
-    <button class="print-btn" onclick="window.print()">🖨️ Print Labels</button>
+    <button class="print-btn" onclick="window.print()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 9V3h12v6M6 21h12v-6H6v6zM6 15H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Print
+    </button>
+  </div>
 </div>
 
-<!-- Labels -->
-${labelsHtml}
+<div class="print-content">
+  ${rowsHtml || '<div style="text-align:center;padding:40px;color:#aaa;">No QR codes to display</div>'}
+</div>
 
+<div class="screen-footer">
+  <span>Batch #${selectedBatch.batchId} &middot; ${batchDate}</span>
+  <span class="brand">QR Batch System</span>
+  <span>Total: ${totalQR} codes</span>
+</div>
+
+<script>window.onload = function(){ window.print(); };</script>
 </body>
 </html>`;
 
-        // ─────────────────────────────────────────────────────────────────────────
-        // OPEN PRINT WINDOW
-        // ─────────────────────────────────────────────────────────────────────────
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-
-        if (printWindow) {
-            printWindow.document.write(printHTML);
-            printWindow.document.close();
-
-            printWindow.onload = function () {
-                setTimeout(() => {
-                    printWindow.print();
-                }, 800);
-            };
-        } else {
-            message.error('Please allow popups to print labels');
-        }
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(printHTML); w.document.close(); }
+        else message.error('Popup blocked. Please allow popups.');
     };
 
     // ── Loading ──
