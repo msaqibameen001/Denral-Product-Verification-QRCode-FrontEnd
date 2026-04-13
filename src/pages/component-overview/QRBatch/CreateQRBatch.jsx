@@ -496,10 +496,11 @@ const CreateQRBatch = () => {
 @page {
     size: 100mm 25mm;
     margin: 0;
+    marks: none;
 }
 
 @media print {
-    @page { size: 100mm 25mm; margin: 0; }
+    @page { size: 100mm 25mm; margin: 0; marks: none; }
     body { margin: 0 !important; padding: 0 !important; }
     .no-print { display: none !important; }
 }
@@ -617,6 +618,7 @@ ${labelsHtml}
             printWindow.document.write(printHTML);
             printWindow.document.close();
             printWindow.onload = function () {
+                printWindow.document.title = '';
                 setTimeout(() => {
                     printWindow.print();
                 }, 800);

@@ -214,12 +214,14 @@ const BatchDetails = () => {
 @page {
     size: 100mm 25mm;
     margin: 0;
+    marks: none;
 }
 
 @media print {
     @page {
         size: 100mm 25mm;
         margin: 0;
+        marks: none;
     }
     
     body {
@@ -451,6 +453,7 @@ ${labelsHtml}
             printWindow.document.close();
 
             printWindow.onload = function () {
+                printWindow.document.title = '';
                 setTimeout(() => {
                     printWindow.print();
                 }, 800);
