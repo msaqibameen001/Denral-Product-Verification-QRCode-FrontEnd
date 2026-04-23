@@ -54,7 +54,7 @@ const MainRoutes = {
     },
     {
       path: 'prod-verify',
-      element: isLoggedIn() ? <ProductVerification /> : <Navigate to="/login" />
+      element: <ProductVerification />
     },
     {
       path: 'qr-batch-create',

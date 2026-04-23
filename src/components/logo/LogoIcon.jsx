@@ -61,7 +61,7 @@ export default function LogoIcon() {
   return (
     <img
       src={logoIcon}
-      alt="Bonded Warehouse Logo"
+      alt="QR Product Verification Logo"
       style={{
         width: '49px',
         height: '49px',

@@ -4,6 +4,7 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import { useNavigate } from 'react-router-dom';
 
 // assets
 import EditOutlined from '@ant-design/icons/EditOutlined';
@@ -15,9 +16,11 @@ import WalletOutlined from '@ant-design/icons/WalletOutlined';
 // ==============================|| HEADER PROFILE - PROFILE TAB ||============================== //
 
 export default function ProfileTab() {
+  const navigate = useNavigate();
   const handleLogoutClick = async () => {
       sessionStorage.clear();
       window.location.reload();
+      navigate('/login');
     };
   return (
     <List component="nav" sx={{ p: 0, '& .MuiListItemIcon-root': { minWidth: 32 } }}>

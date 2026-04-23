@@ -65,7 +65,7 @@ import { useTheme } from '@mui/material/styles';
 import { Box } from '@mui/material';
 
 // assets
-import logoMain from '../../assets/images/users/SASS-LOGO.png'; // Ya .svg, .jpg, .webp etc.
+import logoMain from '../../assets/images/users/SASS-LOGO-removebg.png'; // Ya .svg, .jpg, .webp etc.
 
 // ==============================|| BONDED WAREHOUSE PORTAL LOGO ||============================== //
 
@@ -75,7 +75,7 @@ export default function LogoMain() {
   return (
     <img
       src={logoMain}
-      alt="Bonded Warehouse Portal"
+      alt="QR Product Verification Portal"
       style={{
         marginLeft: '-40px',
         width: '180px',

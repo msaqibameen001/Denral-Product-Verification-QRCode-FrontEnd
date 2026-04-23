@@ -194,7 +194,7 @@ export default function AuthLogin({ isDemo = false }) {
                   </FormHelperText>
                 )}
               </Grid>
-              <Grid sx={{ mt: -1 }} size={12}>
+              {/* <Grid sx={{ mt: -1 }} size={12}>
                 <Stack direction="row" sx={{ gap: 2, alignItems: 'baseline', justifyContent: 'space-between' }}>
                   <FormControlLabel
                     control={
@@ -212,7 +212,7 @@ export default function AuthLogin({ isDemo = false }) {
                     Forgot Password?
                   </Link>
                 </Stack>
-              </Grid>
+              </Grid> */}
               <Grid size={12}>
                 <AnimateButton>
                   <Button sx={{ fontFamily: '"Sofia Sans", sans-serif' }} disableElevation disabled={isLoading} fullWidth size="large" type="submit" variant="contained" color="primary">

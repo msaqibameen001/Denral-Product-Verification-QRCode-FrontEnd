@@ -7,6 +7,8 @@ import {
     Hash, AlertCircle, RotateCcw
 } from 'lucide-react';
 import dayjs from 'dayjs';
+import { isLoggedIn } from '../../../routes/IsLoggedIn';
+import logoMain from '../../../assets/images/users/SASS-LOGO-removebg.png';
 
 /* ── canvas-confetti CDN ── */
 const loadConfetti = () => new Promise((resolve) => {
@@ -30,6 +32,7 @@ const ProductVerification = () => {
     const [serialNo, setSerialNo] = useState('');
     const [searched, setSearched] = useState(false);
     const [hasConfetti, setHasConfetti] = useState(false);
+    const loggedIn = isLoggedIn();
 
     const handleVerify = () => {
         if (!serialNo.trim()) return;
@@ -131,8 +134,8 @@ const ProductVerification = () => {
           position: relative; z-index: 10;
           background: rgba(248,248,246,.92);
           backdrop-filter: blur(14px);
-          border-bottom: .5px solid #e0e0e0;
-          height: 54px; padding: 0 28px;
+          height: ${loggedIn ? '54px' : '84px'}; 
+          padding: 0 28px;
           display: flex; align-items: center; justify-content: space-between;
         }
         .pv-brand { display: flex; align-items: center; gap: 10px; }
@@ -446,21 +449,28 @@ const ProductVerification = () => {
                 <div className="pv-vignette" />
 
                 {/* ── Topbar ── */}
-                <div className="pv-topbar">
-                    <div className="pv-brand">
-                        <div className="pv-brandmark">
-                            <Shield size={15} strokeWidth={1.5} style={{ color: '#fff' }} />
+                {!loggedIn && (
+                    <div className="pv-topbar">
+                        <div className="pv-brand">
+                            {loggedIn ? (
+                                // Logged in: kuch nahi dikhana
+                                <span className="pv-brandsub">Verify</span>
+                            ) : (
+                                // Not logged in: SASS logo
+                                <img
+                                    src={logoMain}
+                                    alt="SASS Logo"
+                                    style={{ height: 82, objectFit: 'contain' }}
+                                />
+                            )}
                         </div>
-                        <span className="pv-brandname">Denral Electric</span>
-                        <div className="pv-sep" />
-                        <span className="pv-brandsub">Verify</span>
-                    </div>
-                    <div className="pv-topright">
-                        <div className="pv-livedot" />
-                        Secure Check
-                    </div>
-                </div>
 
+                        <div className="pv-topright">
+                            <div className="pv-livedot" />
+                            Secure Check
+                        </div>
+                    </div>
+                )}
                 <div className="pv-content">
 
                     {/* ── Hero ── */}

@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import Toolbar from '@mui/material/Toolbar';
 import Box from '@mui/material/Box';
+import { isLoggedIn } from '../../routes/IsLoggedIn';
 
 import Drawer from './Drawer';
 import Header from './Header';
@@ -16,6 +17,7 @@ export default function DashboardLayout() {
   const { menuMasterLoading } = useGetMenuMaster();
   const downXL = useMediaQuery((theme) => theme.breakpoints.down('xl'));
   const location = useLocation();
+  const loggedIn = isLoggedIn();
 
   const isPurchaseRoute = location.pathname === '/purchase';
   const isProdVerifyRoute = location.pathname === '/prod-verify';
@@ -27,7 +29,7 @@ export default function DashboardLayout() {
 
   if (menuMasterLoading) return <Loader />;
 
-  if (isScanRoute) {
+  if (isScanRoute || (isProdVerifyRoute && !loggedIn)) {
     return (
       <Box
         component="main"

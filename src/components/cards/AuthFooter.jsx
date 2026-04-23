@@ -14,7 +14,7 @@ export default function AuthFooter() {
         sx={{ gap: 2, justifyContent: { xs: 'center', sm: 'space-between', textAlign: { xs: 'center', sm: 'inherit' } } }}
       >
         <Typography variant="subtitle2" color="secondary">
-          © Made with love by Team{' '}
+          © Developed by Team{' '}
           <Link href="https://eyeconconsultant.com/" target="_blank" underline="hover">
             Eyecon Consultant
           </Link>
